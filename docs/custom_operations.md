@@ -64,7 +64,7 @@ simple way to ensure you are using the correct version of TensorRT is
 to use the [NGC TensorRT
 container](https://ngc.nvidia.com/catalog/containers/nvidia:tensorrt)
 corresponding to the Triton container. For example, if you are using
-the 20.10 version of Triton, use the 20.10 version of the TensorRT
+the 20.09 version of Triton, use the 20.09 version of the TensorRT
 container.
 
 ## TensorFlow
@@ -92,7 +92,7 @@ set LD_LIBRARY_PATH in the "docker run" command or inside the
 container.
 
 ```bash
-$ export LD_LIBRARY_PATH=/opt/tritonserver/backends/tensorflow1:$LD_LIBRARY_PATH
+$ export LD_LIBRARY_PATH=/opt/tritonserver/lib/tensorflow:$LD_LIBRARY_PATH
 ```
 
 A limitation of this approach is that the custom operations must be
@@ -108,7 +108,7 @@ simple way to ensure you are using the correct version of TensorFlow
 is to use the [NGC TensorFlow
 container](https://ngc.nvidia.com/catalog/containers/nvidia:tensorflow)
 corresponding to the Triton container. For example, if you are using
-the 20.10 version of Triton, use the 20.10 version of the TensorFlow
+the 20.09 version of Triton, use the 20.09 version of the TensorFlow
 container.
 
 ## PyTorch
@@ -121,16 +121,22 @@ follow the instructions in the
 [pytorch/extension-script](https://github.com/pytorch/extension-script)
 repository and your Torchscript custom operations are compiled into
 libpytcustom.so, starting Triton with the following command makes
-those operations available to all PyTorch models. Since all Pytorch
-custom operations depend on one or more PyTorch shared libraries
-that must be available to the custom shared library when it is
-loading. In practice this means that you must make sure that
-/opt/tritonserver/backends/pytorch is on the library path while
-launching the server. There are several ways to control the library path
-and a common one is to use the LD_LIBRARY_PATH.
+those operations available to all PyTorch models.
 
 ```bash
-$ LD_LIBRARY_PATH=/opt/tritonserver/backends/pytorch:$LD_LIBRARY_PATH LD_PRELOAD=libpytcustom.so tritonserver --model-repository=/tmp/models ...
+$ LD_PRELOAD=libpytcustom.so tritonserver --model-repository=/tmp/models ...
+```
+
+All PyTorch custom operations depend on one or more PyTorch shared
+libraries that must be available to the custom shared library when it
+is loading. In practice this means that you must make sure that
+/opt/tritonserver/lib/pytorch is on the library path before issuing
+the above command. There are several ways to control the library path
+and a common one is to use the LD_LIBRARY_PATH. You can set
+LD_LIBRARY_PATH in the "docker run" command or inside the container.
+
+```bash
+$ export LD_LIBRARY_PATH=/opt/tritonserver/lib/pytorch:$LD_LIBRARY_PATH
 ```
 
 A limitation of this approach is that the custom operations must be
@@ -152,7 +158,7 @@ simple way to ensure you are using the correct version of PyTorch is
 to use the [NGC PyTorch
 container](https://ngc.nvidia.com/catalog/containers/nvidia:pytorch)
 corresponding to the Triton container. For example, if you are using
-the 20.10 version of Triton, use the 20.10 version of the PyTorch
+the 20.09 version of Triton, use the 20.09 version of the PyTorch
 container.
 
 ## ONNX

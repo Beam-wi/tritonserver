@@ -24,13 +24,10 @@
 # (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
 # OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
-cmake_minimum_required (VERSION 3.18)
+cmake_minimum_required (VERSION 3.5)
 
 add_subdirectory(library)
 if(NOT ${TRITON_CLIENT_SKIP_EXAMPLES})
   add_subdirectory(examples)
   add_subdirectory(perf_analyzer)
-  # FIXME: Control building the client test with a
-  # separate cmake flag.
-  add_subdirectory(tests)
 endif() # TRITON_CLIENT_SKIP_EXAMPLES

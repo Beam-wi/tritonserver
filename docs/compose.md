@@ -59,7 +59,8 @@ To create an image containing the minimal possible Triton use the
 following multi-stage Dockerfile. As mentioned above the amount of
 customization currently available is limited. As a result the minimum
 Triton still contains both HTTP/REST and GRPC endpoints, S3 and GCS
-filesystem support, and the TensorRT and legacy custom backends.
+filesystem support, and the PyTorch, TensorRT, and legacy custom
+backends.
 
 ```
 FROM nvcr.io/nvidia/tritonserver:<xx.yy>-py3 as full
@@ -77,7 +78,6 @@ $ docker build -t tritonserver_min .
 ### Triton with Specific Backends
 
 One or more of the
-[PyTorch](https://github.com/triton-inference-server/pytorch_backend),
 [TensorFlow1](https://github.com/triton-inference-server/tensorflow_backend),
 [TensorFlow2](https://github.com/triton-inference-server/tensorflow_backend),
 [ONNX

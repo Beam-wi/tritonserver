@@ -355,13 +355,14 @@ def create_visionop_modelfile(models_dir, model_version):
 
         def __init__(self):
             super(CustomVisionNet, self).__init__()
+            self.conv2 = ops.misc.ConvTranspose2d(16, 33, (3, 5))
 
-        def forward(self, input, boxes):
-            return torch.ops.torchvision.roi_align(input, boxes, 1.0, 5, 5, -1, False)
+        def forward(self, input0):
+            return self.conv2(input0)
 
-    visionCustomModel = CustomVisionNet()
-    visionCustomModel.eval()
-    scripted = torch.jit.script(visionCustomModel)
+    moduloCustomModel = CustomVisionNet()
+    example_input0 = torch.rand(1, 16, 10, 10, dtype=torch.float32)
+    traced = torch.jit.trace(moduloCustomModel, (example_input0,))
 
     model_version_dir = models_dir + "/" + \
         model_name + "/" + str(model_version)
@@ -371,7 +372,7 @@ def create_visionop_modelfile(models_dir, model_version):
     except OSError as ex:
         pass  # ignore existing dir
 
-    scripted.save(model_version_dir + "/model.pt")
+    traced.save(model_version_dir + "/model.pt")
 
 
 def create_visionop_modelconfig(models_dir, model_version):
@@ -385,19 +386,14 @@ input [
   {{
     name: "INPUT__0"
     data_type: TYPE_FP32
-    dims: [ 1, 3, 10, 10 ]
-  }},
-  {{
-    name: "INPUT__1"
-    data_type: TYPE_FP32
-    dims: [1, 5]
+    dims: [ 1, 16, 10, 10 ]
   }}
 ]
 output [
   {{
     name: "OUTPUT__0"
     data_type: TYPE_FP32
-    dims: [1, 3, 5, 5]
+    dims: [1, 33, 12, 14]
   }}
 ]
 '''.format(model_name)
@@ -509,7 +505,6 @@ if __name__ == '__main__':
         import torch
         from torch import nn
         from torchvision import ops
-        from torch.nn.modules.utils import _pair
         import torch.utils.cpp_extension
         create_modulo_op_models(FLAGS.models_dir)
         create_vision_op_models(FLAGS.models_dir)

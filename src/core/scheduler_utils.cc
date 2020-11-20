@@ -122,11 +122,10 @@ PriorityQueue::PolicyQueue::Enqueue(std::unique_ptr<InferenceRequest>& request)
     }
   }
   if (timeout_us != 0) {
+    struct timespec now;
+    clock_gettime(CLOCK_MONOTONIC, &now);
     timeout_timestamp_ns_.emplace_back(
-        std::chrono::duration_cast<std::chrono::nanoseconds>(
-            std::chrono::steady_clock::now().time_since_epoch())
-            .count() +
-        timeout_us * 1000);
+        TIMESPEC_TO_NANOS(now) + timeout_us * 1000);
   } else {
     timeout_timestamp_ns_.emplace_back(0);
   }
@@ -153,10 +152,9 @@ bool
 PriorityQueue::PolicyQueue::ApplyPolicy(
     size_t idx, size_t* rejected_count, size_t* rejected_batch_size)
 {
-  uint64_t now_nanoseconds =
-      std::chrono::duration_cast<std::chrono::nanoseconds>(
-          std::chrono::steady_clock::now().time_since_epoch())
-          .count();
+  struct timespec now;
+  clock_gettime(CLOCK_MONOTONIC, &now);
+  auto now_nanoseconds = TIMESPEC_TO_NANOS(now);
   if (idx < queue_.size()) {
     size_t curr_idx = idx;
     while (curr_idx < queue_.size()) {
@@ -319,9 +317,10 @@ bool
 PriorityQueue::IsCursorValid()
 {
   if (pending_cursor_.valid_) {
-    return (uint64_t)std::chrono::duration_cast<std::chrono::nanoseconds>(
-               std::chrono::steady_clock::now().time_since_epoch())
-               .count() < pending_cursor_.pending_batch_closest_timeout_ns_;
+    struct timespec now;
+    clock_gettime(CLOCK_MONOTONIC, &now);
+    return TIMESPEC_TO_NANOS(now) <
+           pending_cursor_.pending_batch_closest_timeout_ns_;
   }
   return false;
 }

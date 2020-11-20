@@ -31,7 +31,7 @@
 Triton provides model management APIs are part of the [HTTP/REST and
 GRPC protocols, and as part of the C
 API](inference_protocols.md). Triton operates in one of three model
-control modes: NONE, EXPLICIT or POLL. The model control mode
+control modes: NONE, POLL, or EXPLICIT. The model control mode
 determines how changes to the model repository are handled by Triton
 and which of these protocols and APIs are available.
 
@@ -43,14 +43,12 @@ UNAVAILABLE and will not be available for inferencing.
 
 Changes to the model repository while the server is running will be
 ignored. Model load and unload requests using the [model control
-protocol](protocol/extension_model_repository.md) will have no affect
+protocol](protocols/extension_model_repository.md) will have no affect
 and will return an error response.
 
-This model control mode is selected by specifying
+This model control mode is selected by specifing
 --model-control-mode=none when starting Triton. This is the default
-model control mode. Changing the model repository while Triton is
-running must be done carefully, as explained in [Modifying the Model
-Repository](#modifying-the-model-repository).
+model control mode.
 
 ## Model Control Mode EXPLICIT
 
@@ -62,18 +60,12 @@ inferencing.
 
 After startup, all model load and unload actions must be initiated
 explicitly by using the [model control
-protocol](protocol/extension_model_repository.md). The response
+protocol](protocols/extension_model_repository.md). The response
 status of the model control request indicates success or failure of
-the load or unload action. When attempting to reload an already loaded
-model, if the reload fails for any reason the already loaded model
-will be unchanged and will remain loaded. If the reload succeeds, the
-newly loaded model will replace the already loaded model without any
-loss in availability for the model.
+the load or unload action.
 
-This model control mode is enabled by specifying
---model-control-mode=explicit. Changing the model repository while
-Triton is running must be done carefully, as explained in [Modifying
-the Model Repository](#modifying-the-model-repository).
+This model control mode is enabled by specifing
+--model-control-mode=explicit.
 
 ## Model Control Mode POLL
 
@@ -82,20 +74,14 @@ startup. Models that Triton is not able to load will be marked as
 UNAVAILABLE and will not be available for inferencing.
 
 Changes to the model repository will be detected and Triton will
-attempt to load and unload models as necessary based on those changes.
-When attempting to reload an already loaded model, if the reload fails
-for any reason the already loaded model will be unchanged and will
-remain loaded. If the reload succeeds, the newly loaded model will
-replace the already loaded model without any loss of availability for
-the model.
-
-Changes to the model repository may not be detected immediately
-because Triton polls the repository periodically. You can control the
-polling interval with the --repository-poll-secs option. The console
-log or the [model ready
+attempt to load and unload models as necessary based on those
+changes. Changes to the model repository may not be detected
+immediately because Triton polls the repository periodically. You can
+control the polling interval with the --repository-poll-secs
+option. The console log or the [model ready
 protocol](https://github.com/kubeflow/kfserving/blob/master/docs/predict-api/v2/required_api.md)
 or the index operation of the [model control
-protocol](protocol/extension_model_repository.md) can be used to
+protocol](protocols/extension_model_repository.md) can be used to
 determine when model repository changes have taken effect.
 
 **WARNING: There is no synchronization between when Triton polls the
@@ -108,11 +94,9 @@ Model load and unload requests using the [model control
 protocol](protocols/extension_model_repository.md) will have no affect
 and will return an error response.
 
-This model control mode is enabled by specifying
+This model control mode is enabled by specifing
 --model-control-mode=poll and by setting --repository-poll-secs to a
-non-zero value when starting Triton. Changing the model repository
-while Triton is running must be done carefully, as explained in
-[Modifying the Model Repository](#modifying-the-model-repository).
+non-zero value when starting Triton.
 
 In POLL mode Triton responds to the following model repository
 changes:
@@ -145,34 +129,3 @@ changes:
   *label_filename* property of the output it corresponds to in the
   [model configuration](model_configuration.md) must be performed at
   the same time.
-
-## Modifying the Model Repository
-
-Each model in a model repository [resides in its own
-sub-directory](model_repository.md#repository-layout). The activity
-allowed on the contents of a model's sub-directory varies depending on
-how Triton is using that model. The state of a model can be determined
-by using the [model
-metadata](inference_protocols.md#inference-protocols-and-apis) or
-[repository index](protocol/extension_model_repository.md#index) APIs.
-
-
-* If the model is actively loading or unloading, no files or
-directories within that sub-directory must be added, removed or
-modified.
-
-* If the model has never been loaded or has been completely unloaded,
-  then the entire model sub-directory can be removed or any of its
-  contents can be added, removed or modified.
-
-* If the model has been completely loaded then any files or
-directories within that sub-directory can be added, removed or
-modified; except for shared libraries implementing the model's
-backend. Triton uses the backend shared libraries while the model is
-loading so removing or modifying them will likely cause Triton to
-crash. To update a model's backend you must first unload the model
-completely, modify the backend shared libraries, and then reload the
-model. On some OSes it may also be possible to simply move the
-existing shared-libraries to another location outside of the model
-repository, copy in the new shared libraries, and then reload the
-model.

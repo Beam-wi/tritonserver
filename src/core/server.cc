@@ -28,6 +28,7 @@
 
 #include <stdint.h>
 #include <time.h>
+#include <unistd.h>
 #include <algorithm>
 #include <csignal>
 #include <iostream>
@@ -488,10 +489,9 @@ InferenceServer::InferAsync(std::unique_ptr<InferenceRequest>& request)
   }
 
 #ifdef TRITON_ENABLE_STATS
-  request->CaptureRequestStartNs();
   INFER_TRACE_ACTIVITY(
       request->Trace(), TRITONSERVER_TRACE_REQUEST_START,
-      request->RequestStartNs());
+      request->CaptureRequestStartNs());
 #endif  // TRITON_ENABLE_STATS
 
   return InferenceRequest::Run(request);

@@ -24,7 +24,7 @@
 # (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
 # OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
-cmake_minimum_required (VERSION 3.18)
+cmake_minimum_required (VERSION 3.5)
 
 #
 # libidentity.so
@@ -52,7 +52,8 @@ if(${TRITON_ENABLE_GPU})
 target_include_directories(identity PRIVATE ${CUDA_INCLUDE_DIRS})
 target_link_libraries(
   identity
-  PUBLIC ${CUDA_nvml_LIBRARY}
+  PUBLIC -L/usr/local/cuda/lib64/stubs
+  PUBLIC -lnvidia-ml
   PRIVATE ${CUDA_LIBRARIES}
 )
 endif() # TRITON_ENABLE_GPU

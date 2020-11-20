@@ -26,11 +26,10 @@
 
 #include "src/core/sequence_batch_scheduler.h"
 
-#ifndef _WIN32
 #include <sys/resource.h>
 #include <sys/syscall.h>
+#include <sys/types.h>
 #include <unistd.h>
-#endif
 #include "src/core/constants.h"
 #include "src/core/dynamic_batch_scheduler.h"
 #include "src/core/logging.h"
@@ -322,10 +321,9 @@ SequenceBatchScheduler::Enqueue(std::unique_ptr<InferenceRequest>& irequest)
 {
   // Queue timer starts at the beginning of the queueing and
   // scheduling process
-  irequest->CaptureQueueStartNs();
   INFER_TRACE_ACTIVITY(
       irequest->Trace(), TRITONSERVER_TRACE_QUEUE_START,
-      irequest->QueueStartNs());
+      irequest->CaptureQueueStartNs());
 
   // For now the request must have batch-size 1 since the sequence
   // batcher does not yet support requests that are statically
@@ -382,9 +380,9 @@ SequenceBatchScheduler::Enqueue(std::unique_ptr<InferenceRequest>& irequest)
   // sequence, and if it is it will release the sequence slot (if any)
   // allocated to that sequence.
   {
-    uint64_t now_us = std::chrono::duration_cast<std::chrono::microseconds>(
-                          std::chrono::steady_clock::now().time_since_epoch())
-                          .count();
+    struct timespec now;
+    clock_gettime(CLOCK_MONOTONIC, &now);
+    uint64_t now_us = TIMESPEC_TO_NANOS(now) / 1000;
     correlation_id_timestamps_[correlation_id] = now_us;
   }
 
@@ -561,7 +559,6 @@ SequenceBatchScheduler::DelayScheduler(
 void
 SequenceBatchScheduler::ReaperThread(const int nice)
 {
-#ifndef _WIN32
   if (setpriority(PRIO_PROCESS, syscall(SYS_gettid), nice) == 0) {
     LOG_VERBOSE(1) << "Starting sequence-batch reaper thread at nice " << nice
                    << "...";
@@ -570,9 +567,6 @@ SequenceBatchScheduler::ReaperThread(const int nice)
                       "(requested nice "
                    << nice << " failed)...";
   }
-#else
-  LOG_VERBOSE(1) << "Starting sequence-batch reaper thread at default nice...";
-#endif
 
   const uint64_t backlog_idle_wait_microseconds = 50 * 1000;
 
@@ -583,9 +577,9 @@ SequenceBatchScheduler::ReaperThread(const int nice)
     {
       std::unique_lock<std::mutex> lock(mu_);
 
-      uint64_t now_us = std::chrono::duration_cast<std::chrono::microseconds>(
-                            std::chrono::steady_clock::now().time_since_epoch())
-                            .count();
+      struct timespec now;
+      clock_gettime(CLOCK_MONOTONIC, &now);
+      uint64_t now_us = TIMESPEC_TO_NANOS(now) / 1000;
 
       for (auto cid_itr = correlation_id_timestamps_.cbegin();
            cid_itr != correlation_id_timestamps_.cend();) {
@@ -845,12 +839,6 @@ DirectSequenceBatch::DirectSequenceBatch(
     return;
   }
 
-  max_batch_size_ = ((size_t)std::max(1, config.max_batch_size()));
-  minimum_slot_utilization_ =
-      config.sequence_batching().direct().minimum_slot_utilization();
-  pending_batch_delay_ns_ =
-      config.sequence_batching().direct().max_queue_delay_microseconds() * 1000;
-
   // Create a scheduler thread associated with 'batcher_idx' that
   // executes the queued requests.
   const int nice = GetCpuNiceLevel(config);
@@ -914,7 +902,6 @@ void
 DirectSequenceBatch::SchedulerThread(
     const int nice, std::promise<bool>* is_initialized)
 {
-#ifndef _WIN32
   if (setpriority(PRIO_PROCESS, syscall(SYS_gettid), nice) == 0) {
     LOG_VERBOSE(1) << "Starting Direct sequence-batch scheduler thread "
                    << batcher_idx_ << " at nice " << nice << "...";
@@ -923,10 +910,6 @@ DirectSequenceBatch::SchedulerThread(
                    << batcher_idx_ << " at default nice (requested nice "
                    << nice << " failed)...";
   }
-#else
-  LOG_VERBOSE(1) << "Starting Direct sequence-batch scheduler thread "
-                   << batcher_idx_ << " at default nice...";
-#endif
 
   // Initialize using the thread. If error then just exit this thread
   // now... that means the corresponding model instance will not have
@@ -1009,13 +992,7 @@ DirectSequenceBatch::SchedulerThread(
         //
         //      b) the required tensor shapes for the batch for the
         //      case where ragged batching is not allowed
-        //
-        //   3) Determine the earliest enqueue time and number of ready
-        //      sequences if queue delay is enabled
-        //
         int32_t max_seq_slot = -1;
-        uint64_t earliest_enqueue_time_ns = UINT64_MAX;
-        size_t ready_cnt = 0;
         for (int32_t seq_slot = 0; seq_slot <= max_active_seq_slot_;
              ++seq_slot) {
           std::deque<std::unique_ptr<InferenceRequest>>& queue =
@@ -1064,52 +1041,8 @@ DirectSequenceBatch::SchedulerThread(
               }
             }
 
-            earliest_enqueue_time_ns = std::min(
-                earliest_enqueue_time_ns, queue.front()->QueueStartNs());
-            ready_cnt++;
             max_seq_slot = seq_slot;
-          }
-        }
-
-        if (max_seq_slot != -1) {
-          if ((pending_batch_delay_ns_ == 0) ||
-              (minimum_slot_utilization_ == 0.0)) {
             wait_microseconds = 0;
-          } else {
-            // Compare the age of the oldest pending request to the maximum
-            // batch queuing delay, and the size of the ready requests in the
-            // batch, execute now if queuing delay is exceeded or the batch size
-            // is large enough. Otherwise create a timer to wakeup a thread to
-            // check again at the maximum allowed delay.
-            uint64_t now_ns =
-                std::chrono::duration_cast<std::chrono::nanoseconds>(
-                    std::chrono::steady_clock::now().time_since_epoch())
-                    .count();
-            uint64_t current_batch_delay_ns =
-                (now_ns - earliest_enqueue_time_ns);
-            if ((current_batch_delay_ns > pending_batch_delay_ns_) ||
-                (((float)ready_cnt) / max_batch_size_ >=
-                 minimum_slot_utilization_)) {
-              wait_microseconds = 0;
-              LOG_VERBOSE(1)
-                  << "start sequence batch execution. "
-                  << "current batch delay: " << current_batch_delay_ns
-                  << "; maximum delay allowed: " << pending_batch_delay_ns_
-                  << "slot utilization: " << ready_cnt << "/" << max_batch_size_
-                  << "; utilization threshold: " << minimum_slot_utilization_;
-            } else {
-              wait_microseconds =
-                  (pending_batch_delay_ns_ - current_batch_delay_ns) / 1000;
-              // reset 'max_seq_slot' so that not request is pulled from the
-              // queues
-              max_seq_slot = -1;
-              LOG_VERBOSE(1)
-                  << "defer sequence batch execution. "
-                  << "current batch delay: " << current_batch_delay_ns
-                  << "; maximum delay allowed: " << pending_batch_delay_ns_
-                  << "slot utilization: " << ready_cnt << "/" << max_batch_size_
-                  << "; utilization threshold: " << minimum_slot_utilization_;
-            }
           }
         }
 
@@ -1289,8 +1222,8 @@ OldestSequenceBatch::OldestSequenceBatch(
   Status status = DynamicBatchScheduler::Create(
       batcher_idx_, 1 /* runner_cnt */, GetCpuNiceLevel(config), OnInit,
       OnWarmup, OnSchedule, true /* dynamic_batching_enabled */,
-      config.max_batch_size(), enforce_equal_shape_tensors_,
-      true /* preserve_ordering */, preferred_batch_sizes,
+      enforce_equal_shape_tensors_, true /* preserve_ordering */,
+      preferred_batch_sizes,
       config.sequence_batching().oldest().max_queue_delay_microseconds(),
       &dynamic_batcher_);
   if (!status.IsOk()) {

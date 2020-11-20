@@ -24,7 +24,7 @@
 # (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
 # OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
-cmake_minimum_required (VERSION 3.18)
+cmake_minimum_required (VERSION 3.5)
 
 #
 # Protobuf
@@ -114,9 +114,7 @@ endif() # TRITON_ENABLE_GPU
 if(${TRITON_ENABLE_GCS})
   find_package(storage_client REQUIRED)
   message(STATUS "Using google-cloud-cpp ${storage_client_VERSION}")
-if (NOT WIN32)
   set_source_files_properties(filesystem.cc PROPERTIES COMPILE_FLAGS -Wno-missing-field-initializers)
-endif() # NOT WIN32
 endif() # TRITON_ENABLE_GCS
 
 if(${TRITON_ENABLE_S3})
@@ -236,13 +234,6 @@ if(${TRITON_ENABLE_S3})
     PRIVATE $<TARGET_PROPERTY:aws-cpp-sdk-s3,INTERFACE_INCLUDE_DIRECTORIES>
   )
 endif() # TRITON_ENABLE_S3
-
-if(${TRITON_ENABLE_AZURE_STORAGE})
-  target_include_directories(
-    server-library
-    PRIVATE ${azure-storage-cpplite_DIR}/include
-  )
-endif() # TRITON_ENABLE_AZURE_STORAGE
 
 target_link_libraries(
   server-library

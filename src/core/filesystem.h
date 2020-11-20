@@ -25,6 +25,9 @@
 // OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #pragma once
 
+#include <dirent.h>
+#include <sys/stat.h>
+#include <unistd.h>
 #include <string>
 #include "google/protobuf/message.h"
 #include "src/core/status.h"

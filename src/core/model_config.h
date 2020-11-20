@@ -28,7 +28,7 @@
 #include <google/protobuf/any.pb.h>
 #include <stdint.h>
 #include "src/core/model_config.pb.h"
-#include "src/core/tritonserver_apis.h"
+#include "triton/core/tritonserver.h"
 
 namespace nvidia { namespace inferenceserver {
 
@@ -68,17 +68,20 @@ enum Platform {
   PLATFORM_TENSORFLOW_GRAPHDEF = 2,
   PLATFORM_TENSORFLOW_SAVEDMODEL = 3,
 #endif  // TRITON_ENABLE_TENSORFLOW
+#ifdef TRITON_ENABLE_CAFFE2
+  PLATFORM_CAFFE2_NETDEF = 4,
+#endif  // TRITON_ENABLE_CAFFE2
 #ifdef TRITON_ENABLE_CUSTOM
-  PLATFORM_CUSTOM = 4,
+  PLATFORM_CUSTOM = 5,
 #endif  // TRITON_ENABLE_CUSTOM
 #ifdef TRITON_ENABLE_ENSEMBLE
-  PLATFORM_ENSEMBLE = 5,
+  PLATFORM_ENSEMBLE = 6,
 #endif  // TRITON_ENABLE_ENSEMBLE
 #ifdef TRITON_ENABLE_ONNXRUNTIME
-  PLATFORM_ONNXRUNTIME_ONNX = 6,
+  PLATFORM_ONNXRUNTIME_ONNX = 7,
 #endif  // TRITON_ENABLE_ONNXRUNTIME
 #ifdef TRITON_ENABLE_PYTORCH
-  PLATFORM_PYTORCH_LIBTORCH = 7
+  PLATFORM_PYTORCH_LIBTORCH = 8
 #endif  // TRITON_ENABLE_PYTORCH
 };
 

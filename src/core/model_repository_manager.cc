@@ -43,13 +43,19 @@
 #include <cuda_runtime_api.h>
 #endif
 
-#include "src/backends/backend/backend_factory.h"
+#ifdef TRITON_ENABLE_CAFFE2
+#include "src/backends/caffe2/netdef_backend_factory.h"
+#endif  // TRITON_ENABLE_CAFFE2
 #ifdef TRITON_ENABLE_CUSTOM
+#include "src/backends/backend/backend_factory.h"
 #include "src/backends/custom/custom_backend_factory.h"
 #endif  // TRITON_ENABLE_CUSTOM
 #ifdef TRITON_ENABLE_ENSEMBLE
 #include "src/backends/ensemble/ensemble_backend_factory.h"
 #endif  // TRITON_ENABLE_ENSEMBLE
+#ifdef TRITON_ENABLE_PYTORCH
+#include "src/backends/pytorch/libtorch_backend_factory.h"
+#endif  // TRITON_ENABLE_PYTORCH
 #ifdef TRITON_ENABLE_TENSORRT
 #include "src/backends/tensorrt/plan_backend_factory.h"
 #endif  // TRITON_ENABLE_TENSORRT
@@ -94,6 +100,15 @@ BuildBackendConfigMap(
     const float tf_gpu_memory_fraction, const bool tf_allow_soft_placement,
     BackendConfigMap* backend_configs)
 {
+#ifdef TRITON_ENABLE_CAFFE2
+  //// Caffe NetDef
+  {
+    auto netdef_config = std::make_shared<NetDefBackendFactory::Config>();
+    netdef_config->autofill = !strict_model_config;
+    (*backend_configs)[kCaffe2NetDefPlatform] = netdef_config;
+  }
+#endif  // TRITON_ENABLE_CAFFE2
+
 #ifdef TRITON_ENABLE_TENSORRT
   //// TensorRT
   {
@@ -102,6 +117,15 @@ BuildBackendConfigMap(
     (*backend_configs)[kTensorRTPlanPlatform] = plan_config;
   }
 #endif  // TRITON_ENABLE_TENSORRT
+
+#ifdef TRITON_ENABLE_PYTORCH
+  //// PyTorch LibTorch
+  {
+    auto libtorch_config = std::make_shared<LibTorchBackendFactory::Config>();
+    libtorch_config->autofill = !strict_model_config;
+    (*backend_configs)[kPyTorchLibTorchPlatform] = libtorch_config;
+  }
+#endif  // TRITON_ENABLE_PYTORCH
 
 #ifdef TRITON_ENABLE_CUSTOM
   //// Custom
@@ -232,14 +256,14 @@ class ModelRepositoryManager::BackendLifeCycle {
   ~BackendLifeCycle() { map_.clear(); }
 
   // Start loading model backends with specified versions asynchronously.
-  // If 'defer_unload' is false, all versions that are being served will
-  // be unloaded before loading the specified versions. Otherwise, the versions
-  // not specified in the load will be unloaded after the load is finished.
+  // If 'force_unload', all versions that are being served will
+  // be unloaded before loading the specified versions.
   Status AsyncLoad(
       const std::string& repository_path, const std::string& model_name,
       const std::set<int64_t>& versions,
-      const inference::ModelConfig& model_config, bool defer_unload = false,
-      std::function<void(Status)> OnComplete = nullptr);
+      const inference::ModelConfig& model_config, bool force_unload = true,
+      std::function<void(int64_t, ModelReadyState, size_t)> OnComplete =
+          nullptr);
 
   // Get specified model version's backend. Latest ready version will
   // be retrieved if 'version' is -1. Return error if the version specified is
@@ -322,21 +346,24 @@ class ModelRepositoryManager::BackendLifeCycle {
 
   const double min_compute_capability_;
 
-  using VersionMap = std::map<
-      int64_t,
-      std::pair<std::unique_ptr<BackendInfo>, std::unique_ptr<BackendInfo>>>;
+  using VersionMap = std::map<int64_t, std::unique_ptr<BackendInfo>>;
   using BackendMap = std::map<std::string, VersionMap>;
   BackendMap map_;
-  std::map<uintptr_t, std::unique_ptr<BackendInfo>> unloading_backends_;
-  std::recursive_mutex map_mtx_;
+  std::mutex map_mtx_;
 
-  std::unique_ptr<TritonBackendFactory> triton_backend_factory_;
+#ifdef TRITON_ENABLE_CAFFE2
+  std::unique_ptr<NetDefBackendFactory> netdef_factory_;
+#endif  // TRITON_ENABLE_CAFFE2
 #ifdef TRITON_ENABLE_CUSTOM
+  std::unique_ptr<TritonBackendFactory> triton_backend_factory_;
   std::unique_ptr<CustomBackendFactory> custom_factory_;
 #endif  // TRITON_ENABLE_CUSTOM
 #ifdef TRITON_ENABLE_TENSORRT
   std::unique_ptr<PlanBackendFactory> plan_factory_;
 #endif  // TRITON_ENABLE_TENSORRT
+#ifdef TRITON_ENABLE_PYTORCH
+  std::unique_ptr<LibTorchBackendFactory> libtorch_factory_;
+#endif  // TRITON_ENABLE_PYTORCH
 #ifdef TRITON_ENABLE_ENSEMBLE
   std::unique_ptr<EnsembleBackendFactory> ensemble_factory_;
 #endif  // TRITON_ENABLE_ENSEMBLE
@@ -351,11 +378,14 @@ ModelRepositoryManager::BackendLifeCycle::Create(
 {
   std::unique_ptr<BackendLifeCycle> local_life_cycle(
       new BackendLifeCycle(min_compute_capability));
+#ifdef TRITON_ENABLE_CAFFE2
   {
-    RETURN_IF_ERROR(TritonBackendFactory::Create(
-        server, backend_cmdline_config_map,
-        &(local_life_cycle->triton_backend_factory_)));
+    const std::shared_ptr<BackendConfig>& config =
+        backend_config_map.find(kCaffe2NetDefPlatform)->second;
+    RETURN_IF_ERROR(NetDefBackendFactory::Create(
+        config, &(local_life_cycle->netdef_factory_)));
   }
+#endif  // TRITON_ENABLE_CAFFE2
 #ifdef TRITON_ENABLE_TENSORRT
   {
     const std::shared_ptr<BackendConfig>& config =
@@ -364,12 +394,25 @@ ModelRepositoryManager::BackendLifeCycle::Create(
         PlanBackendFactory::Create(config, &(local_life_cycle->plan_factory_)));
   }
 #endif  // TRITON_ENABLE_TENSORRT
+#ifdef TRITON_ENABLE_PYTORCH
+  {
+    const std::shared_ptr<BackendConfig>& config =
+        backend_config_map.find(kPyTorchLibTorchPlatform)->second;
+    RETURN_IF_ERROR(LibTorchBackendFactory::Create(
+        config, &(local_life_cycle->libtorch_factory_)));
+  }
+#endif  // TRITON_ENABLE_PYTORCH
 #ifdef TRITON_ENABLE_CUSTOM
   {
     const std::shared_ptr<BackendConfig>& config =
         backend_config_map.find(kCustomPlatform)->second;
     RETURN_IF_ERROR(CustomBackendFactory::Create(
         config, &(local_life_cycle->custom_factory_)));
+  }
+  {
+    RETURN_IF_ERROR(TritonBackendFactory::Create(
+        server, backend_cmdline_config_map,
+        &(local_life_cycle->triton_backend_factory_)));
   }
 #endif  // TRITON_ENABLE_CUSTOM
 #ifdef TRITON_ENABLE_ENSEMBLE
@@ -390,28 +433,26 @@ ModelRepositoryManager::BackendLifeCycle::LiveBackendStates(
     bool strict_readiness)
 {
   LOG_VERBOSE(1) << "LiveBackendStates()";
-  std::lock_guard<std::recursive_mutex> map_lock(map_mtx_);
+  std::lock_guard<std::mutex> map_lock(map_mtx_);
   ModelStateMap live_backend_states;
   for (auto& model_version : map_) {
     bool live = false;
     VersionStateMap version_map;
 
     for (auto& version_backend : model_version.second) {
-      std::lock_guard<std::recursive_mutex> lock(
-          version_backend.second.first->mtx_);
+      std::lock_guard<std::recursive_mutex> lock(version_backend.second->mtx_);
       if (strict_readiness &&
-          version_backend.second.first->state_ != ModelReadyState::READY) {
+          version_backend.second->state_ != ModelReadyState::READY) {
         continue;
       }
 
       // At lease one version is live (ready / loading / unloading)
-      if ((version_backend.second.first->state_ != ModelReadyState::UNKNOWN) &&
-          (version_backend.second.first->state_ !=
-           ModelReadyState::UNAVAILABLE)) {
+      if ((version_backend.second->state_ != ModelReadyState::UNKNOWN) &&
+          (version_backend.second->state_ != ModelReadyState::UNAVAILABLE)) {
         live = true;
         version_map[version_backend.first] = std::make_pair(
-            version_backend.second.first->state_,
-            version_backend.second.first->state_reason_);
+            version_backend.second->state_,
+            version_backend.second->state_reason_);
       }
     }
 
@@ -426,17 +467,16 @@ const ModelRepositoryManager::ModelStateMap
 ModelRepositoryManager::BackendLifeCycle::BackendStates()
 {
   LOG_VERBOSE(1) << "BackendStates()";
-  std::lock_guard<std::recursive_mutex> map_lock(map_mtx_);
+  std::lock_guard<std::mutex> map_lock(map_mtx_);
   ModelStateMap backend_states;
   for (auto& model_version : map_) {
     VersionStateMap version_map;
 
     for (auto& version_backend : model_version.second) {
-      std::lock_guard<std::recursive_mutex> lock(
-          version_backend.second.first->mtx_);
+      std::lock_guard<std::recursive_mutex> lock(version_backend.second->mtx_);
       version_map[version_backend.first] = std::make_pair(
-          version_backend.second.first->state_,
-          version_backend.second.first->state_reason_);
+          version_backend.second->state_,
+          version_backend.second->state_reason_);
     }
 
     backend_states[model_version.first] = std::move(version_map);
@@ -450,16 +490,15 @@ ModelRepositoryManager::BackendLifeCycle::VersionStates(
     const std::string& model_name)
 {
   LOG_VERBOSE(1) << "VersionStates() '" << model_name << "'";
-  std::lock_guard<std::recursive_mutex> map_lock(map_mtx_);
+  std::lock_guard<std::mutex> map_lock(map_mtx_);
   VersionStateMap version_map;
   auto mit = map_.find(model_name);
   if (mit != map_.end()) {
     for (auto& version_backend : mit->second) {
-      std::lock_guard<std::recursive_mutex> lock(
-          version_backend.second.first->mtx_);
+      std::lock_guard<std::recursive_mutex> lock(version_backend.second->mtx_);
       version_map[version_backend.first] = std::make_pair(
-          version_backend.second.first->state_,
-          version_backend.second.first->state_reason_);
+          version_backend.second->state_,
+          version_backend.second->state_reason_);
     }
   }
 
@@ -471,13 +510,14 @@ ModelRepositoryManager::BackendLifeCycle::ModelState(
     const std::string& model_name, const int64_t model_version,
     ModelReadyState* state)
 {
-  std::lock_guard<std::recursive_mutex> map_lock(map_mtx_);
+  std::lock_guard<std::mutex> map_lock(map_mtx_);
   auto mit = map_.find(model_name);
   if (mit != map_.end()) {
     auto vit = mit->second.find(model_version);
     if (vit != mit->second.end()) {
-      std::lock_guard<std::recursive_mutex> lock(vit->second.first->mtx_);
-      *state = vit->second.first->state_;
+      const auto& backend_info = vit->second;
+      std::lock_guard<std::recursive_mutex> lock(backend_info->mtx_);
+      *state = backend_info->state_;
       return Status::Success;
     }
   }
@@ -495,7 +535,7 @@ ModelRepositoryManager::BackendLifeCycle::GetInferenceBackend(
 {
   LOG_VERBOSE(1) << "GetInferenceBackend() '" << model_name << "' version "
                  << version;
-  std::lock_guard<std::recursive_mutex> map_lock(map_mtx_);
+  std::lock_guard<std::mutex> map_lock(map_mtx_);
   auto mit = map_.find(model_name);
   if (mit == map_.end()) {
     return Status(Status::Code::NOT_FOUND, "'" + model_name + "' is not found");
@@ -509,14 +549,14 @@ ModelRepositoryManager::BackendLifeCycle::GetInferenceBackend(
       for (auto& version_backend : mit->second) {
         if (version_backend.first > latest) {
           std::lock_guard<std::recursive_mutex> lock(
-              version_backend.second.first->mtx_);
-          if (version_backend.second.first->state_ == ModelReadyState::READY) {
+              version_backend.second->mtx_);
+          if (version_backend.second->state_ == ModelReadyState::READY) {
             latest = version_backend.first;
             // Tedious, but have to set handle for any "latest" version
             // at the moment to avoid edge case like the following:
             // "versions : 1 3 2", version 3 is latest but is requested
             // to be unloaded when the iterator is examining version 2.
-            *backend = version_backend.second.first->backend_;
+            *backend = version_backend.second->backend_;
           }
         }
       }
@@ -532,9 +572,9 @@ ModelRepositoryManager::BackendLifeCycle::GetInferenceBackend(
                                        " is not found");
     }
   } else {
-    std::lock_guard<std::recursive_mutex> lock(vit->second.first->mtx_);
-    if (vit->second.first->state_ == ModelReadyState::READY) {
-      *backend = vit->second.first->backend_;
+    std::lock_guard<std::recursive_mutex> lock(vit->second->mtx_);
+    if (vit->second->state_ == ModelReadyState::READY) {
+      *backend = vit->second->backend_;
     } else {
       return Status(
           Status::Code::UNAVAILABLE, "'" + model_name + "' version " +
@@ -549,160 +589,47 @@ Status
 ModelRepositoryManager::BackendLifeCycle::AsyncLoad(
     const std::string& repository_path, const std::string& model_name,
     const std::set<int64_t>& versions,
-    const inference::ModelConfig& model_config, bool defer_unload,
-    std::function<void(Status)> OnComplete)
+    const inference::ModelConfig& model_config, bool force_unload,
+    std::function<void(int64_t, ModelReadyState, size_t)> OnComplete)
 {
   LOG_VERBOSE(1) << "AsyncLoad() '" << model_name << "'";
-  std::lock_guard<std::recursive_mutex> map_lock(map_mtx_);
+  std::lock_guard<std::mutex> map_lock(map_mtx_);
   auto it = map_.find(model_name);
   if (it == map_.end()) {
     it = map_.emplace(std::make_pair(model_name, VersionMap())).first;
   }
 
   for (const auto& version : versions) {
-    auto res = it->second.emplace(std::make_pair(
-        version,
-        std::make_pair(
-            std::unique_ptr<BackendInfo>(), std::unique_ptr<BackendInfo>())));
+    auto res = it->second.emplace(
+        std::make_pair(version, std::unique_ptr<BackendInfo>()));
     if (res.second) {
-      res.first->second.first.reset(new BackendInfo(
+      res.first->second.reset(new BackendInfo(
           repository_path, ModelReadyState::UNKNOWN, ActionType::NO_ACTION,
           model_config));
-    } else {
-      auto& serving_backend = res.first->second.first;
-      std::lock_guard<std::recursive_mutex> lock(serving_backend->mtx_);
-      // If the version backend is being served, the re-load of the version
-      // should be performed in background to avoid version down-time
-      if (serving_backend->state_ == ModelReadyState::READY) {
-        if (res.first->second.second != nullptr) {
-          res.first->second.second.reset(new BackendInfo(
-              repository_path, ModelReadyState::UNKNOWN, ActionType::NO_ACTION,
-              model_config));
-        }
-      }
     }
   }
 
   Status status = Status::Success;
   size_t affected_version_cnt =
-      defer_unload ? versions.size() : it->second.size();
-
-  struct LoadTracker {
-    LoadTracker(size_t affected_version_cnt)
-        : load_failed_(false), completed_version_cnt_(0),
-          affected_version_cnt_(affected_version_cnt)
-    {
-    }
-
-    bool load_failed_;
-    std::string reason_;
-    size_t completed_version_cnt_;
-    size_t affected_version_cnt_;
-    std::map<int64_t, BackendInfo*> load_set_;
-    // The set of model versions to be unloaded after the load is completed
-    std::set<int64_t> defer_unload_set_;
-    std::mutex mtx_;
-  };
-  std::shared_ptr<LoadTracker> load_tracker(
-      new LoadTracker(affected_version_cnt));
+      force_unload ? it->second.size() : versions.size();
   for (auto& version_backend : it->second) {
-    auto version = version_backend.first;
-    BackendInfo* backend_info = (version_backend.second.second == nullptr)
-                                    ? version_backend.second.first.get()
-                                    : version_backend.second.second.get();
-
-    std::lock_guard<std::recursive_mutex> lock(backend_info->mtx_);
-    if (versions.find(version) != versions.end()) {
-      backend_info->repository_path_ = repository_path;
-      backend_info->model_config_ = model_config;
-      backend_info->next_action_ = ActionType::LOAD;
-      backend_info->platform_ = GetPlatform(model_config.platform());
-    } else if (!defer_unload) {
-      backend_info->next_action_ = ActionType::UNLOAD;
-    } else {
-      load_tracker->defer_unload_set_.emplace(version);
-      continue;
+    std::lock_guard<std::recursive_mutex> lock(version_backend.second->mtx_);
+    if (versions.find(version_backend.first) != versions.end()) {
+      version_backend.second->repository_path_ = repository_path;
+      version_backend.second->model_config_ = model_config;
+      version_backend.second->next_action_ = ActionType::LOAD;
+    } else if (force_unload) {
+      version_backend.second->next_action_ = ActionType::UNLOAD;
     }
 
+    auto version = version_backend.first;
+    auto backend_info = version_backend.second.get();
     // set version-wise callback before triggering next action
     if (OnComplete != nullptr) {
-      backend_info->OnComplete_ = [this, model_name, version, backend_info,
-                                   OnComplete, load_tracker]() {
-        std::lock_guard<std::mutex> tracker_lock(load_tracker->mtx_);
-        ++load_tracker->completed_version_cnt_;
-        load_tracker->load_set_[version] = backend_info;
-        if (backend_info->state_ != ModelReadyState::READY) {
-          load_tracker->load_failed_ = true;
-          load_tracker->reason_ +=
-              ("version " + std::to_string(version) + ": " +
-               backend_info->state_reason_ + ";");
-        }
-        // Check if all versions are completed and finish the load
-        if (load_tracker->completed_version_cnt_ ==
-            load_tracker->affected_version_cnt_) {
-          std::lock_guard<std::recursive_mutex> map_lock(map_mtx_);
-          auto it = map_.find(model_name);
-          if (load_tracker->load_failed_) {
-            // If any of the versions fails to load, abort the load and unload
-            // all newly loaded versions
-            for (auto& loaded : load_tracker->load_set_) {
-              std::lock_guard<std::recursive_mutex> lock(loaded.second->mtx_);
-              if (loaded.second->state_ == ModelReadyState::READY) {
-                auto vit = it->second.find(loaded.first);
-                // Check if the version backend is loaded in background, if so,
-                // move the backend to 'unloading_backends_' and unload it.
-                if (vit->second.second.get() == loaded.second) {
-                  unloading_backends_[(uintptr_t)loaded.second] =
-                      std::move(vit->second.second);
-                  auto unload_backend = loaded.second;
-                  loaded.second->OnComplete_ = [this, unload_backend]() {
-                    std::lock_guard<std::recursive_mutex> map_lock(map_mtx_);
-                    unloading_backends_.erase((uintptr_t)unload_backend);
-                  };
-                } else {
-                  loaded.second->OnComplete_ = nullptr;
-                }
-                loaded.second->next_action_ = ActionType::UNLOAD;
-                TriggerNextAction(model_name, loaded.first, loaded.second);
-              }
-            }
-          } else {
-            for (auto& loaded : load_tracker->load_set_) {
-              auto vit = it->second.find(loaded.first);
-              // Check if the version backend is loaded in background, if so,
-              // replace the current version backend and unload it.
-              if (vit->second.second.get() == loaded.second) {
-                vit->second.second.swap(vit->second.first);
-                auto unload_backend = vit->second.second.get();
-                unloading_backends_[(uintptr_t)unload_backend] =
-                    std::move(vit->second.second);
-                std::lock_guard<std::recursive_mutex> lock(
-                    unload_backend->mtx_);
-                unload_backend->next_action_ = ActionType::UNLOAD;
-                unload_backend->OnComplete_ = [this, unload_backend]() {
-                  std::lock_guard<std::recursive_mutex> map_lock(map_mtx_);
-                  unloading_backends_.erase((uintptr_t)unload_backend);
-                };
-                TriggerNextAction(model_name, version, unload_backend);
-              }
-            }
-            // Unload the deferred versions
-            for (const auto deferred_version :
-                 load_tracker->defer_unload_set_) {
-              auto vit = it->second.find(deferred_version);
-              auto unload_backend = vit->second.first.get();
-              std::lock_guard<std::recursive_mutex> lock(unload_backend->mtx_);
-              unload_backend->next_action_ = ActionType::UNLOAD;
-              unload_backend->OnComplete_ = nullptr;
-              TriggerNextAction(model_name, deferred_version, unload_backend);
-            }
-          }
-          OnComplete(
-              load_tracker->load_failed_
-                  ? Status(Status::Code::INVALID_ARG, load_tracker->reason_)
-                  : Status::Success);
-        }
-      };
+      version_backend.second->OnComplete_ =
+          [version, backend_info, affected_version_cnt, OnComplete]() {
+            OnComplete(version, backend_info->state_, affected_version_cnt);
+          };
     }
     Status action_status = TriggerNextAction(model_name, version, backend_info);
     // Only care about status on unloading case
@@ -788,12 +715,6 @@ ModelRepositoryManager::BackendLifeCycle::Load(
       backend_info->state_ = ModelReadyState::LOADING;
       backend_info->state_reason_.clear();
       {
-        // FIXME WAR for glibc bug when spawning threads too
-        // quickly. https://sourceware.org/bugzilla/show_bug.cgi?id=19329
-        // We should instead use a thread-pool here with the number of
-        // threads chosen to provide the required amount of load
-        // parallelism. DLIS-1833.
-        std::this_thread::sleep_for(std::chrono::milliseconds(100));
         std::thread worker(
             &ModelRepositoryManager::BackendLifeCycle::CreateInferenceBackend,
             this, model_name, version, backend_info);
@@ -861,10 +782,13 @@ ModelRepositoryManager::BackendLifeCycle::CreateInferenceBackend(
 
   // If 'backend' is specified in the config then use the new triton
   // backend.
+#ifdef TRITON_ENABLE_CUSTOM
   if (!model_config.backend().empty()) {
     status = triton_backend_factory_->CreateBackend(
         backend_info->repository_path_, model_name, version, model_config, &is);
-  } else {
+  } else
+#endif  // TRITON_ENABLE_CUSTOM
+  {
     switch (backend_info->platform_) {
 #ifdef TRITON_ENABLE_TENSORRT
       case Platform::PLATFORM_TENSORRT_PLAN:
@@ -872,6 +796,18 @@ ModelRepositoryManager::BackendLifeCycle::CreateInferenceBackend(
             version_path, model_config, min_compute_capability_, &is);
         break;
 #endif  // TRITON_ENABLE_TENSORRT
+#ifdef TRITON_ENABLE_CAFFE2
+      case Platform::PLATFORM_CAFFE2_NETDEF:
+        status = netdef_factory_->CreateBackend(
+            version_path, model_config, min_compute_capability_, &is);
+        break;
+#endif  // TRITON_ENABLE_CAFFE2
+#ifdef TRITON_ENABLE_PYTORCH
+      case Platform::PLATFORM_PYTORCH_LIBTORCH:
+        status = libtorch_factory_->CreateBackend(
+            version_path, model_config, min_compute_capability_, &is);
+        break;
+#endif  // TRITON_ENABLE_PYTORCH
 #ifdef TRITON_ENABLE_CUSTOM
       case Platform::PLATFORM_CUSTOM:
         status = custom_factory_->CreateBackend(
@@ -1124,7 +1060,7 @@ ModelRepositoryManager::PollAndUpdateInternal(bool* all_models_polled)
     inference::ModelConfig model_config;
     std::set<int64_t> versions;
     std::string empty_path;
-    // Utilize "defer_unload" argument of AsyncLoad()
+    // Utilize "force_unload" of AsyncLoad()
     backend_life_cycle_->AsyncLoad(empty_path, name, versions, model_config);
   }
 
@@ -1134,14 +1070,15 @@ ModelRepositoryManager::PollAndUpdateInternal(bool* all_models_polled)
   return Status::Success;
 }
 
-std::map<std::string, Status>
+Status
 ModelRepositoryManager::LoadModelByDependency()
 {
-  std::map<std::string, Status> res;
   struct ModelState {
-    ModelState(DependencyNode* node) : node_(node), status_(Status::Success) {}
+    ModelState(DependencyNode* node) : node_(node) {}
     DependencyNode* node_;
-    Status status_;
+    std::set<int64_t> loaded_versions_;
+    std::set<int64_t> unloaded_versions_;
+    std::mutex mtx_;
     std::promise<void> ready_;
   };
   NodeSet loaded_models;
@@ -1154,7 +1091,7 @@ ModelRepositoryManager::LoadModelByDependency()
       inference::ModelConfig model_config;
       std::set<int64_t> versions;
       std::string empty_path;
-      // Utilize "defer_unload" argument of AsyncLoad()
+      // Utilize "force_unload" of AsyncLoad()
       backend_life_cycle_->AsyncLoad(
           empty_path, invalid_model->model_name_, versions, model_config);
       LOG_ERROR << invalid_model->status_.AsString();
@@ -1179,9 +1116,20 @@ ModelRepositoryManager::LoadModelByDependency()
         status = backend_life_cycle_->AsyncLoad(
             repository_path, valid_model->model_name_, versions,
             valid_model->model_config_, true,
-            [model_state](Status load_status) {
-              model_state->status_ = load_status;
-              model_state->ready_.set_value();
+            [model_state](
+                int64_t version, ModelReadyState state,
+                size_t total_version_cnt) {
+              std::lock_guard<std::mutex> lk(model_state->mtx_);
+              if (state == ModelReadyState::READY) {
+                model_state->loaded_versions_.emplace(version);
+              } else {
+                model_state->unloaded_versions_.emplace(version);
+              }
+              if ((model_state->loaded_versions_.size() +
+                   model_state->unloaded_versions_.size()) ==
+                  total_version_cnt) {
+                model_state->ready_.set_value();
+              }
             });
       }
       if (!status.IsOk()) {
@@ -1195,19 +1143,11 @@ ModelRepositoryManager::LoadModelByDependency()
     }
     for (auto& model_state : model_states) {
       model_state->ready_.get_future().wait();
-      res[model_state->node_->model_name_] = model_state->status_;
-      const auto version_state =
-          backend_life_cycle_->VersionStates(model_state->node_->model_name_);
-      model_state->node_->loaded_versions_.clear();
-      for (const auto& vs : version_state) {
-        if (vs.second.first == ModelReadyState::READY) {
-          model_state->node_->loaded_versions_.emplace(vs.first);
-        }
-      }
+      model_state->node_->loaded_versions_ = model_state->loaded_versions_;
     }
     set_pair = ModelsToLoadUnload(loaded_models);
   }
-  return res;
+  return Status::Success;
 }
 
 Status
@@ -1298,7 +1238,6 @@ ModelRepositoryManager::LoadUnloadModels(
     const std::set<std::string>& model_names, ActionType type,
     bool* all_models_polled)
 {
-  auto status = Status::Success;
   *all_models_polled = true;
   // Update ModelInfo related to file system accordingly
   std::set<std::string> added, deleted, modified, unmodified;
@@ -1363,34 +1302,17 @@ ModelRepositoryManager::LoadUnloadModels(
     inference::ModelConfig model_config;
     std::set<int64_t> versions;
     std::string empty_path;
-    // Utilize "defer_unload" argument of AsyncLoad()
+    // Utilize "force_unload" of AsyncLoad()
     backend_life_cycle_->AsyncLoad(empty_path, name, versions, model_config);
   }
 
   // Update dependency graph and load
   UpdateDependencyGraph(added, deleted, modified);
 
-  // load / unload the models affected, and check the load status of
-  // the requested models
-  const auto& load_status = LoadModelByDependency();
-  if (status.IsOk() && (type == ActionType::LOAD)) {
-    std::string load_error_message = "";
-    for (const auto& model_name : model_names) {
-      auto it = load_status.find(model_name);
-      // If 'model_name' not in load status, it means the (re-)load is not
-      // necessary because there is no change in the model's directory
-      if ((it != load_status.end()) && !it->second.IsOk()) {
-        load_error_message +=
-            ("load failed for model '" + model_name +
-             "': " + it->second.Message() + "\n");
-      }
-    }
-    if (!load_error_message.empty()) {
-      status = Status(Status::Code::INVALID_ARG, load_error_message);
-    }
-  }
+  // model loading / unloading error will be printed but ignored
+  LoadModelByDependency();
 
-  return status;
+  return Status::Success;
 }
 
 Status
@@ -2017,8 +1939,8 @@ ModelRepositoryManager::VersionsToLoad(
       existing_versions.insert(version);
     }
     catch (const std::invalid_argument& ia) {
-      LOG_WARNING << "ignore version directory '" << subdir
-                  << "' which fails to convert to integral number";
+      LOG_ERROR << "failed to convert version directory '" << subdir
+                << "' to integral number";
     }
   }
 

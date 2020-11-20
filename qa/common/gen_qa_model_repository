@@ -75,13 +75,12 @@ HOST_ENSEMBLEDESTDIR=/tmp/$TRITON_VERSION/qa_ensemble_model_repository
 HOST_NOSHAPEDESTDIR=/tmp/$TRITON_VERSION/qa_noshape_model_repository
 HOST_PLGDESTDIR=/tmp/$TRITON_VERSION/qa_trt_plugin_model_repository
 HOST_RAGGEDDESTDIR=/tmp/$TRITON_VERSION/qa_ragged_model_repository
-HOST_FORMATDESTDIR=/tmp/$TRITON_VERSION/qa_trt_format_model_repository
 
 rm -fr $HOST_SRCDIR $HOST_DESTDIR $HOST_VARDESTDIR
 rm -fr $HOST_IDENTITYDESTDIR $HOST_IDENTITYBIGDESTDIR $HOST_SHAPEDESTDIR
 rm -fr $HOST_SEQDESTDIR $HOST_DYNASEQDESTDIR $HOST_VARSEQDESTDIR
-rm -fr $HOST_ENSEMBLEDESTDIR $HOST_NOSHAPEDESTDIR $HOST_RESHAPEDESTDIR
-rm -fr $HOST_PLGDESTDIR $HOST_RAGGEDDESTDIR $HOST_FORMATDESTDIR
+rm -fr $HOST_ENSEMBLEDESTDIR $HOST_NOSHAPEDESTDIR
+rm -fr $HOST_PLGDESTDIR $HOST_RAGGEDDESTDIR $HOST_RESHAPEDESTDIR
 mkdir -p $HOST_SRCDIR
 mkdir -p $HOST_DESTDIR
 mkdir -p $HOST_VARDESTDIR
@@ -96,7 +95,6 @@ mkdir -p $HOST_ENSEMBLEDESTDIR
 mkdir -p $HOST_NOSHAPEDESTDIR
 mkdir -p $HOST_PLGDESTDIR
 mkdir -p $HOST_RAGGEDDESTDIR
-mkdir -p $HOST_FORMATDESTDIR
 
 # Since the models required by ensemble models may not be available
 # at this point, storing ensemble models separately so that other qa directories
@@ -119,12 +117,11 @@ cp ./gen_qa_sequence_models.py $HOST_SRCDIR/.
 cp ./gen_qa_dyna_sequence_models.py $HOST_SRCDIR/.
 cp ./gen_ensemble_model_utils.py $HOST_SRCDIR/.
 cp ./gen_qa_trt_plugin_models.py $HOST_SRCDIR/.
-cp ./gen_qa_trt_format_models.py $HOST_SRCDIR/.
 cp ./gen_qa_ragged_models.py $HOST_SRCDIR/.
 cp ./test_util.py $HOST_SRCDIR/.
 
 ONNXSCRIPT=onnx_gen.cmds
-TORCHSCRIPT=torch_gen.cmds
+C2SCRIPT=c2_gen.cmds
 TFSCRIPT=tf_gen.cmds
 TRTSCRIPT=trt_gen.cmds
 
@@ -142,7 +139,6 @@ ENSEMBLEDESTDIR=/tmp/ensemblemodels
 NOSHAPEDESTDIR=/tmp/noshapemodels
 PLGDESTDIR=/tmp/pluginmodels
 RAGGEDDESTDIR=/tmp/raggedmodels
-FORMATDESTDIR=/tmp/formatmodels
 
 # ONNX
 cat >$HOST_SRCDIR/$ONNXSCRIPT <<EOF
@@ -190,33 +186,33 @@ if [ $? -ne 0 ]; then
 fi
 
 # PyTorch
-cat >$HOST_SRCDIR/$TORCHSCRIPT <<EOF
+cat >$HOST_SRCDIR/$C2SCRIPT <<EOF
 #!/bin/bash
 set -e
-python3 $SRCDIR/gen_qa_models.py --libtorch --models_dir=$DESTDIR
+python3 $SRCDIR/gen_qa_models.py --netdef --libtorch --models_dir=$DESTDIR
 chmod -R 777 $DESTDIR
-python3 $SRCDIR/gen_qa_models.py --libtorch --variable --models_dir=$VARDESTDIR
+python3 $SRCDIR/gen_qa_models.py --netdef --libtorch --variable --models_dir=$VARDESTDIR
 chmod -R 777 $VARDESTDIR
-python3 $SRCDIR/gen_qa_identity_models.py --libtorch --models_dir=$IDENTITYDESTDIR
+python3 $SRCDIR/gen_qa_identity_models.py --netdef --libtorch --models_dir=$IDENTITYDESTDIR
 chmod -R 777 $IDENTITYDESTDIR
-python3 $SRCDIR/gen_qa_reshape_models.py --libtorch --variable --models_dir=$RESHAPEDESTDIR
+python3 $SRCDIR/gen_qa_reshape_models.py --netdef --libtorch --variable --models_dir=$RESHAPEDESTDIR
 chmod -R 777 $RESHAPEDESTDIR
-python3 $SRCDIR/gen_qa_sequence_models.py --libtorch --models_dir=$SEQDESTDIR
+python3 $SRCDIR/gen_qa_sequence_models.py --netdef --libtorch --models_dir=$SEQDESTDIR
 chmod -R 777 $SEQDESTDIR
-python3 $SRCDIR/gen_qa_sequence_models.py --libtorch --variable --models_dir=$VARSEQDESTDIR
+python3 $SRCDIR/gen_qa_sequence_models.py --netdef --libtorch --variable --models_dir=$VARSEQDESTDIR
 chmod -R 777 $VARSEQDESTDIR
-python3 $SRCDIR/gen_qa_dyna_sequence_models.py --libtorch --models_dir=$DYNASEQDESTDIR
+python3 $SRCDIR/gen_qa_dyna_sequence_models.py --netdef --libtorch --models_dir=$DYNASEQDESTDIR
 chmod -R 777 $DYNASEQDESTDIR
 EOF
 
-chmod a+x $HOST_SRCDIR/$TORCHSCRIPT
+chmod a+x $HOST_SRCDIR/$C2SCRIPT
 if [ $? -ne 0 ]; then
     echo -e "Failed: chmod"
     exit 1
 fi
 
 docker pull $PYTORCH_IMAGE
-docker run --gpus device=$CUDA_DEVICE --rm --entrypoint $SRCDIR/$TORCHSCRIPT \
+docker run --gpus device=$CUDA_DEVICE --rm --entrypoint $SRCDIR/$C2SCRIPT \
        --mount type=bind,source=$HOST_SRCDIR,target=$SRCDIR \
        --mount type=bind,source=$HOST_DESTDIR,target=$DESTDIR \
        --mount type=bind,source=$HOST_VARDESTDIR,target=$VARDESTDIR \
@@ -312,8 +308,6 @@ python3 $SRCDIR/gen_qa_sequence_models.py --tensorrt --variable --models_dir=$VA
 chmod -R 777 $VARSEQDESTDIR
 python3 $SRCDIR/gen_qa_ragged_models.py --tensorrt --models_dir=$RAGGEDDESTDIR
 chmod -R 777 $RAGGEDDESTDIR
-python3 $SRCDIR/gen_qa_trt_format_models.py --models_dir=$FORMATDESTDIR
-chmod -R 777 $FORMATDESTDIR
 # make shared library for custom clip plugin
 (cd /workspace/tensorrt/samples/python/uff_custom_plugin && cmake . && make && \
 cp libclipplugin.so $PLGDESTDIR/.)
@@ -341,7 +335,6 @@ docker run --gpus device=$CUDA_DEVICE --rm --entrypoint $SRCDIR/$TRTSCRIPT \
        --mount type=bind,source=$HOST_VARSEQDESTDIR,target=$VARSEQDESTDIR \
        --mount type=bind,source=$HOST_PLGDESTDIR,target=$PLGDESTDIR \
        --mount type=bind,source=$HOST_RAGGEDDESTDIR,target=$RAGGEDDESTDIR \
-       --mount type=bind,source=$HOST_FORMATDESTDIR,target=$FORMATDESTDIR \
        $TENSORRT_IMAGE
 if [ $? -ne 0 ]; then
     echo -e "Failed"

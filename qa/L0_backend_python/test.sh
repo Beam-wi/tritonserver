@@ -87,7 +87,7 @@ fi
 RET=0
 
 set +e
-python3 $CLIENT_PY >>$CLIENT_LOG 2>&1
+python $CLIENT_PY >>$CLIENT_LOG 2>&1
 if [ $? -ne 0 ]; then
     RET=1
 else
@@ -112,27 +112,19 @@ if [ "$SERVER_PID" == "0" ]; then
     exit 1
 fi
 
-sleep 5
-
-triton_procs=`pgrep --parent $SERVER_PID`
-
-set +e
 # Trigger non-graceful termination of Triton
 kill -9 $SERVER_PID
 
 # Wait 10 seconds so that Python gRPC server can detect non-graceful exit
 sleep 10
 
-for triton_proc in $triton_procs; do
-    kill -0 $triton_proc > /dev/null 2>&1
-    if [ $? -eq 0 ]; then
-        cat $CLIENT_LOG
-        echo -e "\n***\n*** Python backend non-graceful exit test failed \n***"
-        RET=1
-        break
-    fi
-done
-set -e
+num_triton_procs=`ps aux | grep /opt/tritonserver/ | wc -l`
+
+if [ $num_triton_procs -ne 1 ]; then
+    cat $CLIENT_LOG
+    echo -e "\n***\n*** Python backend non-graceful exit test failed \n***"
+    RET=1
+fi
 
 # These models have errors in the initialization and finalization
 # steps and we want to ensure that correct error is being returned
@@ -146,7 +138,7 @@ set +e
 run_server_nowait
 wait $SERVER_PID
 
-grep "name 'lorem_ipsum' is not defined" $SERVER_LOG
+grep "Exception calling application: name 'lorem_ipsum' is not defined" $SERVER_LOG
 
 if [ $? -ne 0 ]; then
     cat $CLIENT_LOG
@@ -160,7 +152,6 @@ mkdir -p models/fini_error/1/
 cp ../python_models/fini_error/model.py ./models/fini_error/1/
 cp ../python_models/fini_error/config.pbtxt ./models/fini_error/
 
-set +e
 run_server
 if [ "$SERVER_PID" == "0" ]; then
     echo -e "\n***\n*** Failed to start $SERVER\n***"
@@ -171,54 +162,13 @@ fi
 kill $SERVER_PID
 wait $SERVER_PID
 
-grep "name 'undefined_variable' is not defined" $SERVER_LOG
+grep "Exception calling application: name 'undefined_variable' is not defined" $SERVER_LOG
 
 if [ $? -ne 0 ]; then
     cat $CLIENT_LOG
     echo -e "\n***\n*** fini_error model test failed \n***"
     RET=1
 fi
-set -e
-
-# Test KIND_GPU
-rm -rf models/
-mkdir -p models/add_sub_gpu/1/
-cp ../python_models/add_sub/model.py ./models/add_sub_gpu/1/
-cp ../python_models/add_sub_gpu/config.pbtxt ./models/add_sub_gpu/
-
-run_server
-if [ "$SERVER_PID" == "0" ]; then
-    echo -e "\n***\n*** Failed to start $SERVER\n***"
-    cat $SERVER_LOG
-    exit 1
-fi
-
-if [ $? -ne 0 ]; then
-    cat $CLIENT_LOG
-    echo -e "\n***\n*** KIND_GPU model test failed \n***"
-    RET=1
-fi
-
-kill $SERVER_PID
-wait $SERVER_PID
-
-# Test environment variable propagation
-rm -rf models/
-mkdir -p models/model_env/1/
-cp ../python_models/model_env/model.py ./models/model_env/1/
-cp ../python_models/model_env/config.pbtxt ./models/model_env/
-
-export MY_ENV="MY_ENV"
-run_server
-if [ "$SERVER_PID" == "0" ]; then
-    echo -e "\n***\n*** Failed to start $SERVER\n***"
-    echo -e "\n***\n*** Environment variable test failed \n***"
-    cat $SERVER_LOG
-    exit 1
-fi
-
-kill $SERVER_PID
-wait $SERVER_PID
 
 if [ $RET -eq 0 ]; then
   echo -e "\n***\n*** Test Passed\n***"
@@ -228,4 +178,3 @@ else
 fi
 
 exit $RET
-

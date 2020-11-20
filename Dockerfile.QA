@@ -30,9 +30,7 @@
 
 ARG BASE_IMAGE=tritonserver
 ARG BUILD_IMAGE=tritonserver_build
-ARG SDK_IMAGE=tritonserver_sdk
-ARG TRITON_COMMON_REPO_TAG=main
-ARG TRITON_CORE_REPO_TAG=main
+ARG CLIENT_IMAGE=tritonserver_client
 
 ############################################################################
 ## Build tests in the BUILD_IMAGE since it has already been configured
@@ -50,25 +48,9 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
             libopencv-core-dev
 
 WORKDIR /tmp/tritonbuild/tritonserver/build
-ARG TRITON_COMMON_REPO_TAG
-ARG TRITON_CORE_REPO_TAG
-RUN cmake -DTRITON_ENABLE_GPU=ON \
-          -DTRITON_COMMON_REPO_TAG:STRING=${TRITON_COMMON_REPO_TAG} \
-          -DTRITON_CORE_REPO_TAG:STRING=${TRITON_CORE_REPO_TAG} /workspace/build && \
+RUN cmake -DTRITON_ENABLE_GPU=ON /workspace/build && \
     make -j16 test-util
 
-# Add models and custom backend for imageprocess ensemble example repo
-WORKDIR /workspace/qa/ensemble_models/image_preprocess_ensemble_example
-RUN mkdir -p inception_graphdef/1 && \
-    wget -O /tmp/inception_v3_2016_08_28_frozen.pb.tar.gz \
-         https://storage.googleapis.com/download.tensorflow.org/models/inception_v3_2016_08_28_frozen.pb.tar.gz && \
-    (cd /tmp && tar xzf inception_v3_2016_08_28_frozen.pb.tar.gz) && \
-    mv /tmp/inception_v3_2016_08_28_frozen.pb inception_graphdef/1/model.graphdef && \
-    mkdir -p image_preprocess_nhwc_299x299x3_inception/1 && \
-    cp /tmp/tritonbuild/tritonserver/build/test-util/install/lib/libimagepreprocess.so \
-        image_preprocess_nhwc_299x299x3_inception/1/. && \
-    mkdir -p preprocess_inception_ensemble/1
-    
 # Update the qa/ directory with test executables, models, etc.
 WORKDIR /workspace
 RUN mkdir -p qa/common && \
@@ -83,35 +65,27 @@ RUN mkdir -p qa/common && \
     cp /workspace/src/clients/go/*.go qa/L0_simple_go_client/. && \
     mkdir qa/L0_backend_release/simple_models && \
     cp -r docs/examples/model_repository/simple qa/L0_backend_release/simple_models/. && \
-    mkdir qa/L0_backend_release/simple_seq_models && \
-    cp -r /workspace/docs/examples/model_repository/simple_sequence qa/L0_backend_release/simple_seq_models/. && \
     mkdir qa/L0_shared_memory/models && \
     cp -r docs/examples/model_repository/simple qa/L0_shared_memory/models/. && \
     mkdir qa/L0_cuda_shared_memory/models && \
     cp -r docs/examples/model_repository/simple qa/L0_cuda_shared_memory/models/. && \
-    mkdir qa/L0_grpc/models && \
+    cp -r /workspace/docs/examples/model_repository/simple qa/L0_client_timeout/models && \
     cp -r /workspace/docs/examples/model_repository/simple qa/L0_grpc/models && \
-    cp -r /workspace/docs/examples/model_repository/simple_dyna_sequence qa/L0_grpc/models && \
-    cp -r /workspace/docs/examples/model_repository/simple_int8 qa/L0_grpc/models && \
-    cp -r /workspace/docs/examples/model_repository/simple_sequence qa/L0_grpc/models && \
     cp -r /workspace/docs/examples/model_repository/simple_string qa/L0_grpc/models && \
     cp -r /workspace/docs/examples/model_repository/inception_graphdef qa/L0_grpc/models && \
-    mkdir qa/L0_http/models && \
     cp -r /workspace/docs/examples/model_repository/simple qa/L0_http/models && \
-    cp -r /workspace/docs/examples/model_repository/simple_dyna_sequence qa/L0_http/models && \
-    cp -r /workspace/docs/examples/model_repository/simple_identity qa/L0_http/models && \
-    cp -r /workspace/docs/examples/model_repository/simple_sequence qa/L0_http/models && \
-    cp -r /workspace/docs/examples/model_repository/simple_string qa/L0_http/models && \
     cp -r /workspace/docs/examples/model_repository/inception_graphdef qa/L0_http/models && \
+    cp -r /workspace/docs/examples/model_repository/simple_string qa/L0_http/models && \
     mkdir qa/L0_https/models && \
     cp -r docs/examples/model_repository/simple qa/L0_https/models/. && \
     mkdir qa/L0_secure_grpc/models && \
     cp -r docs/examples/model_repository/simple qa/L0_secure_grpc/models/. && \
+    cp -r /workspace/docs/examples/ensemble_model_repository qa/L0_perf_analyzer/ && \
+    cp -r /workspace/docs/examples/ensemble_model_repository qa/L0_grpc/ && \
+    cp -r /workspace/docs/examples/ensemble_model_repository qa/L0_http/ && \
     cp /tmp/tritonbuild/install/bin/simple qa/L0_simple_lib/. && \
     cp /tmp/tritonbuild/install/bin/memory_alloc qa/L0_io/. && \
-    cp /tmp/tritonbuild/install/bin/multi_server qa/L0_multi_server/. && \
-    cp /tmp/tritonbuild/tritonserver/build/test-util/install/bin/memory_test qa/L0_memory/. && \
-    cp /tmp/tritonbuild/tritonserver/build/test-util/install/bin/rate_limiter_test qa/L0_rate_limiter/.
+    cp /tmp/tritonbuild/tritonserver/build/test-util/install/bin/memory_test qa/L0_memory/.
 
 # caffe2plan will not exist if the build was done without TensorRT enabled
 RUN if [ -f /tmp/tritonbuild/tritonserver/build/test-util/install/bin/caffe2plan ]; then \
@@ -130,6 +104,12 @@ RUN mkdir -p qa/custom_models/custom_int32_int32_int32/1 && \
     mkdir -p qa/custom_models/custom_nobatch_float32_float32_float32/1 && \
     cp /tmp/tritonbuild/tritonserver/build/test-util/install/lib/libaddsub.so \
         qa/custom_models/custom_nobatch_float32_float32_float32/1/. && \
+    mkdir -p qa/L0_grpc/models/simple_custom/1 && \
+    cp /tmp/tritonbuild/tritonserver/build/test-util/install/lib/libaddsub.so \
+        qa/L0_grpc/models/simple_custom/1/. && \
+    mkdir -p qa/L0_http/models/simple_custom/1 && \
+    cp /tmp/tritonbuild/tritonserver/build/test-util/install/lib/libaddsub.so \
+        qa/L0_http/models/simple_custom/1/. && \
     mkdir -p qa/L0_simple_ensemble/models/simple/1 && \
     cp /tmp/tritonbuild/tritonserver/build/test-util/install/lib/libaddsub.so \
         qa/L0_simple_ensemble/models/simple/1/. && \
@@ -144,13 +124,35 @@ RUN mkdir -p qa/L0_custom_image_preprocess/models/image_preprocess_nhwc_224x224x
     cp /tmp/tritonbuild/tritonserver/build/test-util/install/lib/libimagepreprocess.so \
         qa/L0_custom_image_preprocess/models/image_preprocess_nhwc_224x224x3/1/.
 
+RUN mkdir -p qa/L0_perf_analyzer/ensemble_model_repository/image_preprocess_nchw_3x224x224_inception/1 && \
+    cp /tmp/tritonbuild/tritonserver/build/test-util/install/lib/libimagepreprocess.so \
+        qa/L0_perf_analyzer/ensemble_model_repository/image_preprocess_nchw_3x224x224_inception/1/.
+
 RUN mkdir -p qa/L0_backend_identity/models && \
     cp -r src/backends/backend/examples/models/identity_fp32 qa/L0_backend_identity/models/. && \
     mkdir -p qa/L0_backend_identity/models/identity_fp32/1 && \
     cp /tmp/tritonbuild/install/backends/identity/libtriton_identity.so \
         qa/L0_backend_identity/models/identity_fp32/1/.
 
-RUN mkdir -p qa/custom_models/custom_sequence_int32/1 && \
+RUN mkdir -p qa/L0_backend_release/simple_seq_models/simple_sequence/1 && \
+    cp /tmp/tritonbuild/tritonserver/build/test-util/install/lib/libsequence.so \
+        qa/L0_backend_release/simple_seq_models/simple_sequence/1/. && \
+    mkdir -p qa/L0_client_timeout/models/simple_sequence/1 && \
+    cp /tmp/tritonbuild/tritonserver/build/test-util/install/lib/libsequence.so \
+        qa/L0_client_timeout/models/simple_sequence/1/. && \
+    mkdir -p qa/L0_grpc/models/simple_sequence/1 && \
+    cp /tmp/tritonbuild/tritonserver/build/test-util/install/lib/libsequence.so \
+        qa/L0_grpc/models/simple_sequence/1/. && \
+    mkdir -p qa/L0_grpc/models_dyna/simple_sequence/1 && \
+    cp /tmp/tritonbuild/tritonserver/build/test-util/install/lib/libdyna_sequence.so \
+        qa/L0_grpc/models_dyna/simple_sequence/1/. && \
+    mkdir -p qa/L0_http/models/simple_sequence/1 && \
+    cp /tmp/tritonbuild/tritonserver/build/test-util/install/lib/libsequence.so \
+        qa/L0_http/models/simple_sequence/1/. && \
+    mkdir -p qa/L0_http/models_dyna/simple_sequence/1 && \
+    cp /tmp/tritonbuild/tritonserver/build/test-util/install/lib/libdyna_sequence.so \
+        qa/L0_http/models_dyna/simple_sequence/1/. && \
+    mkdir -p qa/custom_models/custom_sequence_int32/1 && \
     cp /tmp/tritonbuild/tritonserver/build/test-util/install/lib/libsequence.so \
         qa/custom_models/custom_sequence_int32/1/. && \
     mkdir -p qa/custom_models/custom_dyna_sequence_int32/1 && \
@@ -193,16 +195,12 @@ RUN cp /tmp/tritonbuild/tritonserver/build/test-util/install/lib/libidentity.so 
         qa/L0_batcher/. && \
     cp /tmp/tritonbuild/tritonserver/build/test-util/install/lib/libidentity.so \
         qa/L0_client_timeout/. && \
-    cp /tmp/tritonbuild/tritonserver/build/test-util/install/lib/libidentity.so \
-        qa/L0_custom_legacy/. && \
     mkdir -p qa/L0_infer_shm && \
     cp -r qa/L0_infer/. qa/L0_infer_shm && \
     mkdir -p qa/L0_infer_cudashm && \
     cp -r qa/L0_infer/. qa/L0_infer_cudashm && \
     mkdir -p qa/L0_infer_valgrind && \
     cp -r qa/L0_infer/. qa/L0_infer_valgrind && \
-    mkdir -p qa/L0_infer_tf2 && \
-    cp -r qa/L0_infer/. qa/L0_infer_tf2 && \
     mkdir -p qa/L0_trt_shape_tensors_shm && \
     cp -r qa/L0_trt_shape_tensors/. qa/L0_trt_shape_tensors_shm && \
     mkdir -p qa/L0_trt_shape_tensors_cudashm && \
@@ -223,14 +221,6 @@ RUN cp /tmp/tritonbuild/tritonserver/build/test-util/install/lib/libidentity.so 
     cp -r qa/L0_perf_nomodel/. qa/L0_perf_nomodel_shm && \
     mkdir -p qa/L0_perf_nomodel_cudashm && \
     cp -r qa/L0_perf_nomodel/. qa/L0_perf_nomodel_cudashm
-
-# L0_model_control_stress will not be present if gitlab tests are not available
-RUN if [ -d qa/L0_model_control_stress ]; then \
-        mkdir -p qa/L0_model_control_stress_valgrind && \
-            cp -r qa/L0_model_control_stress/. qa/L0_model_control_stress_valgrind && \
-            mkdir -p qa/L0_model_control_stress_valgrind_massif && \
-            cp -r qa/L0_model_control_stress/. qa/L0_model_control_stress_valgrind_massif; \
-    fi
 
 RUN cp /tmp/tritonbuild/install/backends/repeat/libtriton_repeat.so \
         qa/L0_model_config/.
@@ -254,9 +244,9 @@ RUN mkdir -p qa/L0_decoupled/models/simple_repeat/1 && \
     mkdir -p qa/L0_decoupled/models/nested_square/1
 
 ############################################################################
-## Copy artifacts from sdk container
+## Copy artifacts from client container
 ############################################################################
-FROM ${SDK_IMAGE} AS sdk
+FROM ${CLIENT_IMAGE} AS client
 
 WORKDIR /workspace
 COPY --from=build /workspace/qa/ qa/
@@ -317,7 +307,7 @@ RUN rm -f /usr/bin/python && \
     ln -s /usr/bin/python3 /usr/bin/python
 
 RUN pip3 install --upgrade wheel setuptools && \
-    pip3 install --upgrade numpy pillow future grpcio requests gsutil awscli six boofuzz grpcio-channelz azure-cli 
+    pip3 install --upgrade numpy pillow future grpcio requests gsutil awscli six boofuzz grpcio-channelz
 
 # need protoc-gen-go to generate go specific gRPC modules
 RUN go get github.com/golang/protobuf/protoc-gen-go && \
@@ -327,7 +317,7 @@ RUN go get github.com/golang/protobuf/protoc-gen-go && \
 # user should own all artifacts in case CI is run using triton-server
 # user.
 WORKDIR /opt/tritonserver
-COPY --chown=1000:1000 --from=sdk /workspace/qa/ qa/
+COPY --chown=1000:1000 --from=client /workspace/qa/ qa/
 
 # Remove CI tests that are meant to run only on build image and
 # install the tritonserver/triton python client APIs.

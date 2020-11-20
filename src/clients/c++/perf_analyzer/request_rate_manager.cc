@@ -26,8 +26,6 @@
 
 #include "src/clients/c++/perf_analyzer/request_rate_manager.h"
 
-namespace perfanalyzer {
-
 RequestRateManager::~RequestRateManager()
 {
   // The destruction of derived class should wait for all the request generator
@@ -35,7 +33,7 @@ RequestRateManager::~RequestRateManager()
   StopWorkerThreads();
 }
 
-cb::Error
+nic::Error
 RequestRateManager::Create(
     const bool async, const bool streaming,
     const uint64_t measurement_window_ms, Distribution request_distribution,
@@ -45,7 +43,7 @@ RequestRateManager::Create(
     const bool zero_input, std::vector<std::string>& user_data,
     const SharedMemoryType shared_memory_type, const size_t output_shm_size,
     const std::shared_ptr<ModelParser>& parser,
-    const std::shared_ptr<cb::ClientBackendFactory>& factory,
+    const std::shared_ptr<TritonClientFactory>& factory,
     std::unique_ptr<LoadManager>* manager)
 {
   std::unique_ptr<RequestRateManager> local_manager(new RequestRateManager(
@@ -65,7 +63,7 @@ RequestRateManager::Create(
 
   *manager = std::move(local_manager);
 
-  return cb::Error::Success;
+  return nic::Error::Success;
 }
 
 RequestRateManager::RequestRateManager(
@@ -74,7 +72,7 @@ RequestRateManager::RequestRateManager(
     const size_t max_threads, const uint32_t num_of_sequences,
     const size_t sequence_length, const SharedMemoryType shared_memory_type,
     const size_t output_shm_size, const std::shared_ptr<ModelParser>& parser,
-    const std::shared_ptr<cb::ClientBackendFactory>& factory)
+    const std::shared_ptr<TritonClientFactory>& factory)
     : LoadManager(
           async, streaming, batch_size, max_threads, sequence_length,
           shared_memory_type, output_shm_size, parser, factory),
@@ -89,7 +87,7 @@ RequestRateManager::RequestRateManager(
       new std::chrono::nanoseconds(2 * measurement_window_ms * 1000 * 1000));
 }
 
-cb::Error
+nic::Error
 RequestRateManager::ChangeRequestRate(const double request_rate)
 {
   PauseWorkers();
@@ -97,16 +95,16 @@ RequestRateManager::ChangeRequestRate(const double request_rate)
   GenerateSchedule(request_rate);
   ResumeWorkers();
 
-  return cb::Error::Success;
+  return nic::Error::Success;
 }
 
-cb::Error
+nic::Error
 RequestRateManager::ResetWorkers()
 {
   PauseWorkers();
   ResumeWorkers();
 
-  return cb::Error::Success;
+  return nic::Error::Success;
 }
 
 void
@@ -179,16 +177,16 @@ RequestRateManager::ResumeWorkers()
   wake_signal_.notify_all();
 }
 
+
 void
 RequestRateManager::Infer(
-    std::shared_ptr<RequestRateManager::ThreadStat> thread_stat,
-    std::shared_ptr<RequestRateManager::ThreadConfig> thread_config)
+    std::shared_ptr<ThreadStat> thread_stat,
+    std::shared_ptr<ThreadConfig> thread_config)
 {
   std::shared_ptr<InferContext> ctx(new InferContext());
-  thread_stat->status_ = factory_->CreateClientBackend(&(ctx->infer_backend_));
-  ctx->options_.reset(new cb::InferOptions(parser_->ModelName()));
+  thread_stat->status_ = factory_->CreateTritonClient(&(ctx->infer_client_));
+  ctx->options_.reset(new nic::InferOptions(parser_->ModelName()));
   ctx->options_->model_version_ = parser_->ModelVersion();
-  ctx->options_->model_signature_name_ = parser_->ModelSignatureName();
 
   thread_stat->contexts_stat_.emplace_back();
 
@@ -207,8 +205,8 @@ RequestRateManager::Infer(
       new std::map<std::string, AsyncRequestProperties>());
 
   // Callback function for handling asynchronous requests
-  const auto callback_func = [&](cb::InferResult* result) {
-    std::shared_ptr<cb::InferResult> result_ptr(result);
+  const auto callback_func = [&](nic::InferResult* result) {
+    std::shared_ptr<nic::InferResult> result_ptr(result);
     if (thread_stat->cb_status_.IsOk()) {
       // Add the request timestamp to thread Timestamp vector with
       // proper locking
@@ -224,7 +222,7 @@ RequestRateManager::Infer(
           thread_stat->request_timestamps_.emplace_back(std::make_tuple(
               it->second.start_time_, end_time_async, it->second.sequence_end_,
               it->second.delayed_));
-          ctx->infer_backend_->ClientInferStat(
+          ctx->infer_client_->ClientInferStat(
               &(thread_stat->contexts_stat_[0]));
         } else {
           return;
@@ -236,7 +234,7 @@ RequestRateManager::Infer(
 
   if (streaming_) {
     // Decoupled models should not collect client side statistics
-    thread_stat->status_ = ctx->infer_backend_->StartStream(
+    thread_stat->status_ = ctx->infer_client_->StartStream(
         callback_func, (!parser_->IsDecoupled()));
     if (!thread_stat->status_.IsOk()) {
       return;
@@ -359,10 +357,11 @@ RequestRateManager::Infer(
   } while (true);
 }
 
+
 void
 RequestRateManager::Request(
     std::shared_ptr<InferContext> context, const uint64_t request_id,
-    const bool delayed, cb::OnCompleteFn callback_func,
+    const bool delayed, nic::InferenceServerClient::OnCompleteFn callback_func,
     std::shared_ptr<std::map<std::string, AsyncRequestProperties>>
         async_req_map,
     std::shared_ptr<ThreadStat> thread_stat)
@@ -381,10 +380,10 @@ RequestRateManager::Request(
       it->second.delayed_ = delayed;
     }
     if (streaming_) {
-      thread_stat->status_ = context->infer_backend_->AsyncStreamInfer(
+      thread_stat->status_ = context->infer_client_->AsyncStreamInfer(
           *(context->options_), context->inputs_, context->outputs_);
     } else {
-      thread_stat->status_ = context->infer_backend_->AsyncInfer(
+      thread_stat->status_ = context->infer_client_->AsyncInfer(
           callback_func, *(context->options_), context->inputs_,
           context->outputs_);
     }
@@ -395,8 +394,8 @@ RequestRateManager::Request(
   } else {
     struct timespec start_time_sync, end_time_sync;
     clock_gettime(CLOCK_MONOTONIC, &start_time_sync);
-    cb::InferResult* results = nullptr;
-    thread_stat->status_ = context->infer_backend_->Infer(
+    nic::InferResult* results;
+    thread_stat->status_ = context->infer_client_->Infer(
         &results, *(context->options_), context->inputs_, context->outputs_);
     if (results != nullptr) {
       delete results;
@@ -412,7 +411,7 @@ RequestRateManager::Request(
       thread_stat->request_timestamps_.emplace_back(std::make_tuple(
           start_time_sync, end_time_sync, context->options_->sequence_end_,
           delayed));
-      thread_stat->status_ = context->infer_backend_->ClientInferStat(
+      thread_stat->status_ = context->infer_client_->ClientInferStat(
           &(thread_stat->contexts_stat_[0]));
       if (!thread_stat->status_.IsOk()) {
         return;
@@ -420,5 +419,3 @@ RequestRateManager::Request(
     }
   }
 }
-
-}  // namespace perfanalyzer

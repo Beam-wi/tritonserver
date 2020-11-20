@@ -36,7 +36,7 @@
 #include "src/core/model_config.h"
 #include "src/core/response_allocator.h"
 #include "src/core/status.h"
-#include "src/core/tritonserver_apis.h"
+#include "triton/core/tritonserver.h"
 
 namespace nvidia { namespace inferenceserver {
 
@@ -417,9 +417,9 @@ class InferenceRequest {
   uint64_t QueueStartNs() const { return queue_start_ns_; }
   uint64_t CaptureQueueStartNs()
   {
-    queue_start_ns_ = std::chrono::duration_cast<std::chrono::nanoseconds>(
-             std::chrono::steady_clock::now().time_since_epoch())
-             .count();
+    struct timespec ts;
+    clock_gettime(CLOCK_MONOTONIC, &ts);
+    queue_start_ns_ = TIMESPEC_TO_NANOS(ts);
     return queue_start_ns_;
   }
 
@@ -427,9 +427,9 @@ class InferenceRequest {
   uint64_t RequestStartNs() const { return request_start_ns_; }
   uint64_t CaptureRequestStartNs()
   {
-    request_start_ns_ = std::chrono::duration_cast<std::chrono::nanoseconds>(
-             std::chrono::steady_clock::now().time_since_epoch())
-             .count();
+    struct timespec ts;
+    clock_gettime(CLOCK_MONOTONIC, &ts);
+    request_start_ns_ = TIMESPEC_TO_NANOS(ts);
     return request_start_ns_;
   }
 

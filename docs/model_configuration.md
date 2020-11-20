@@ -91,15 +91,15 @@ documentation](https://github.com/triton-inference-server/backend/blob/main/READ
 ### Maximum Batch Size
 
 The *max_batch_size* property indicates the maximum batch size that
-the model supports for the [types of
+the model supports for the **[types of
 batching](architecture.md#models-and-schedulers) that can be exploited
-by Triton. If the model's batch dimension is the first dimension, and
-all inputs and outputs to the model have this batch dimension, then
-Triton can use its [dynamic batcher](#dynamic-batcher) or [sequence
-batcher](#sequence-batcher) to automatically use batching with the
-model. In this case *max_batch_size* should be set to a value
-greater-or-equal-to 1 that indicates the maximum batch size that
-Triton should use with the model.
+by Triton**. If the model's batch dimension is the first dimension,
+and all inputs and outputs to the model have this batch dimension,
+then Triton can use its [dynamic batcher](#dynamic-batcher) or
+[sequence batcher](#sequence-batcher) to automatically use batching
+with the model. In this case *max_batch_size* should be set to a value
+>=1 that indicates the maximum batch size that Triton should use with
+the model.
 
 For models that do not support batching, or do not support batching in
 the specific ways described above, *max_batch_size* must be set to
@@ -129,16 +129,16 @@ An input shape indicates the shape of an input tensor expected by the
 model and by Triton in inference requests. An output shape indicates
 the shape of an output tensor produced by the model and returned by
 Triton in response to an inference request. Both input and output
-shape must have rank greater-or-equal-to 1, that is, the empty shape
-**[ ]** is not allowed.
+shape must have rank >= 1, that is, the empty shape **[ ]** is not
+allowed.
 
 Input and output shapes are specified by a combination of
 *max_batch_size* and the dimensions specified by the input or output
-*dims* property. For models with *max_batch_size* greater-than 0, the
-full shape is formed as [ -1 ] + *dims*. For models with
-*max_batch_size* equal to 0, the full shape is formed as *dims*. For
-example, for the following configuration the shape of "input0" is [
--1, 16 ] and the shape of "output0" is [ -1, 4 ].
+*dims* property. For models with *max_batch_size* > 0, the full shape
+is formed as [ -1 ] + *dims*. For models with *max_batch_size* == 0,
+the full shape is formed as *dims*. For example, for the following
+configuration the shape of "input0" is [ -1, 16 ] and the shape of
+"output0" is [ -1, 4 ].
 
 ```
   platform: "tensorrt_plan"
@@ -159,9 +159,9 @@ example, for the following configuration the shape of "input0" is [
   ]
 ```
 
-For a configuration that is identical except that *max_batch_size*
-equal to 0, the shape of "input0" is [ 16 ] and the shape of "output0"
-is [ 4 ].
+For a configuration that is identical except that *max_batch_size* ==
+0, the shape of "input0" is [ 16 ] and the shape of "output0" is [ 4
+].
 
 ```
   platform: "tensorrt_plan"
@@ -189,11 +189,11 @@ input tensor where the first dimension must be size 4 but the second
 dimension can be any size, the model configuration for that input
 would include *dims: [ 4, -1 ]*. Triton would then accept inference
 requests where that input tensor's second dimension was any value
-greater-or-equal-to 0. The model configuration can be more restrictive
-than what is allowed by the underlying model. For example, even though
-the framework model itself allows the second dimension to be any size,
-the model configuration could be specified as *dims: [ 4, 4 ]*. In
-this case, Triton would only accept inference requests where the input
+>= 0. The model configuration can be more restrictive than what is
+allowed by the underlying model. For example, even though the
+framework model itself allows the second dimension to be any size, the
+model configuration could be specified as *dims: [ 4, 4 ]*. In this
+case, Triton would only accept inference requests where the input
 tensor's shape was exactly *[ 4, 4 ]*.
 
 The [*reshape* property](#reshape) must be used if there is a mismatch
@@ -239,21 +239,21 @@ corresponding datatype for the model frameworks and for the Python
 numpy library. If a model framework does not have an entry for a given
 datatype, then Triton does not support that datatype for that model.
 
-|Type          |TensorRT      |TensorFlow    |ONNX Runtime  |PyTorch  |NumPy         |
-|--------------|--------------|--------------|--------------|---------|--------------|
-|TYPE_BOOL     | kBOOL        |DT_BOOL       |BOOL          |kBool    |bool          |
-|TYPE_UINT8    |              |DT_UINT8      |UINT8         |kByte    |uint8         |
-|TYPE_UINT16   |              |DT_UINT16     |UINT16        |         |uint16        |
-|TYPE_UINT32   |              |DT_UINT32     |UINT32        |         |uint32        |
-|TYPE_UINT64   |              |DT_UINT64     |UINT64        |         |uint64        |
-|TYPE_INT8     | kINT8        |DT_INT8       |INT8          |kChar    |int8          |
-|TYPE_INT16    |              |DT_INT16      |INT16         |kShort   |int16         |
-|TYPE_INT32    | kINT32       |DT_INT32      |INT32         |kInt     |int32         |
-|TYPE_INT64    |              |DT_INT64      |INT64         |kLong    |int64         |
-|TYPE_FP16     | kHALF        |DT_HALF       |FLOAT16       |         |float16       |
-|TYPE_FP32     | kFLOAT       |DT_FLOAT      |FLOAT         |kFloat   |float32       |
-|TYPE_FP64     |              |DT_DOUBLE     |DOUBLE        |kDouble  |float64       |
-|TYPE_STRING   |              |DT_STRING     |STRING        |         |dtype(object) |
+|Type          |TensorRT      |TensorFlow    |Caffe2        |ONNX Runtime  |PyTorch  |NumPy         |
+|--------------|--------------|--------------|--------------|--------------|---------|--------------|
+|TYPE_BOOL     | kBOOL        |DT_BOOL       |BOOL          |BOOL          |kBool    |bool          |
+|TYPE_UINT8    |              |DT_UINT8      |UINT8         |UINT8         |kByte    |uint8         |
+|TYPE_UINT16   |              |DT_UINT16     |UINT16        |UINT16        |         |uint16        |
+|TYPE_UINT32   |              |DT_UINT32     |              |UINT32        |         |uint32        |
+|TYPE_UINT64   |              |DT_UINT64     |              |UINT64        |         |uint64        |
+|TYPE_INT8     | kINT8        |DT_INT8       |INT8          |INT8          |kChar    |int8          |
+|TYPE_INT16    |              |DT_INT16      |INT16         |INT16         |kShort   |int16         |
+|TYPE_INT32    | kINT32       |DT_INT32      |INT32         |INT32         |kInt     |int32         |
+|TYPE_INT64    |              |DT_INT64      |INT64         |INT64         |kLong    |int64         |
+|TYPE_FP16     | kHALF        |DT_HALF       |FLOAT16       |FLOAT16       |         |float16       |
+|TYPE_FP32     | kFLOAT       |DT_FLOAT      |FLOAT         |FLOAT         |kFloat   |float32       |
+|TYPE_FP64     |              |DT_DOUBLE     |DOUBLE        |DOUBLE        |kDouble  |float64       |
+|TYPE_STRING   |              |DT_STRING     |              |STRING        |         |dtype(object) |
 
 For TensorRT each value is in the nvinfer1::DataType namespace. For
 example, nvinfer1::DataType::kFLOAT is the 32-bit floating-point
@@ -261,6 +261,10 @@ datatype.
 
 For TensorFlow each value is in the tensorflow namespace. For example,
 tensorflow::DT_FLOAT is the 32-bit floating-point value.
+
+For Caffe2 each value is in the caffe2 namespace and is prepended with
+TensorProto_DataType_. For example, caffe2::TensorProto_DataType_FLOAT
+is the 32-bit floating-point datatype.
 
 For ONNX Runtime each value is prepended with ONNX_TENSOR_ELEMENT_DATA_TYPE_.
 For example, ONNX_TENSOR_ELEMENT_DATA_TYPE_FLOAT is the 32-bit floating-point

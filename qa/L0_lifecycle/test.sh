@@ -192,7 +192,7 @@ mkdir models models_0
 for i in graphdef savedmodel ; do
     cp -r $DATADIR/qa_model_repository/${i}_float32_float32_float32 models/.
 done
-for i in onnx plan ; do
+for i in netdef plan ; do
     cp -r $DATADIR/qa_model_repository/${i}_float32_float32_float32 models_0/.
 done
 rm models/graphdef_float32_float32_float32/*/*
@@ -270,7 +270,7 @@ mkdir models models_0
 for i in graphdef savedmodel ; do
     cp -r $DATADIR/qa_model_repository/${i}_float32_float32_float32 models/.
 done
-for i in onnx plan ; do
+for i in netdef plan ; do
     cp -r $DATADIR/qa_model_repository/${i}_float32_float32_float32 models_0/.
 done
 rm models/graphdef_float32_float32_float32/config.pbtxt
@@ -318,7 +318,7 @@ sed -i "s/OUTPUT/_OUTPUT/" models_0/custom_int32_int32_int32/config.pbtxt
 for i in graphdef savedmodel ; do
     cp -r $DATADIR/qa_model_repository/${i}_float32_float32_float32 models/.
 done
-for i in onnx ; do
+for i in netdef ; do
     cp -r $DATADIR/qa_model_repository/${i}_float32_float32_float32 models_0/.
 done
 
@@ -358,7 +358,7 @@ LOG_IDX=$((LOG_IDX+1))
 # LifeCycleTest.test_parse_error_model_no_version
 rm -fr models
 mkdir models
-for i in savedmodel onnx plan ; do
+for i in savedmodel netdef plan ; do
     cp -r $DATADIR/qa_model_repository/${i}_float32_float32_float32 models/.
 done
 mkdir -p models/graphdef_float32_float32_float32
@@ -442,54 +442,10 @@ fi
 
 LOG_IDX=$((LOG_IDX+1))
 
-# LifeCycleTest.test_parse_ignore_non_intergral_version
-rm -fr models
-mkdir models
-for i in savedmodel ; do
-    cp -r $DATADIR/qa_model_repository/${i}_float32_float32_float32 models/.
-    mv models/${i}_float32_float32_float32/3 models/${i}_float32_float32_float32/abc
-done
-
-SERVER_ARGS="--model-repository=`pwd`/models --exit-on-error=false \
-             --exit-timeout-secs=5"
-SERVER_LOG="./inference_server_$LOG_IDX.log"
-run_server
-if [ "$SERVER_PID" == "0" ]; then
-    echo -e "\n***\n*** Failed to start $SERVER\n***"
-    cat $SERVER_LOG
-    exit 1
-fi
-
-set +e
-python $LC_TEST LifeCycleTest.test_parse_ignore_non_intergral_version >>$CLIENT_LOG 2>&1
-if [ $? -ne 0 ]; then
-    echo -e "\n***\n*** Test Failed\n***"
-    RET=1
-else
-    check_test_results $CLIENT_LOG 1
-    if [ $? -ne 0 ]; then
-        cat $CLIENT_LOG
-        echo -e "\n***\n*** Test Result Verification Failed\n***"
-        RET=1
-    fi
-fi
-set -e
-
-kill $SERVER_PID
-wait $SERVER_PID
-
-# check server log for the warning messages
-if [ `grep -c "ignore version directory 'abc' which fails to convert to integral number" $SERVER_LOG` == "0" ]; then
-    echo -e "\n***\n*** Test Failed\n***"
-    RET=1
-fi
-
-LOG_IDX=$((LOG_IDX+1))
-
 # LifeCycleTest.test_dynamic_model_load_unload
 rm -fr models savedmodel_float32_float32_float32
 mkdir models
-for i in graphdef onnx plan ; do
+for i in graphdef netdef plan ; do
     cp -r $DATADIR/qa_model_repository/${i}_float32_float32_float32 models/.
 done
 cp -r $DATADIR/qa_model_repository/savedmodel_float32_float32_float32 .
@@ -527,7 +483,7 @@ LOG_IDX=$((LOG_IDX+1))
 # LifeCycleTest.test_dynamic_model_load_unload_disabled
 rm -fr models savedmodel_float32_float32_float32
 mkdir models
-for i in graphdef onnx plan ; do
+for i in graphdef netdef plan ; do
     cp -r $DATADIR/qa_model_repository/${i}_float32_float32_float32 models/.
 done
 cp -r $DATADIR/qa_model_repository/savedmodel_float32_float32_float32 .
@@ -724,7 +680,7 @@ mkdir models models_0
 for i in graphdef ; do
     cp -r $DATADIR/qa_model_repository/${i}_float32_float32_float32 models/.
 done
-for i in onnx ; do
+for i in netdef ; do
     cp -r $DATADIR/qa_model_repository/${i}_float32_float32_float32 models_0/.
 done
 cp -r $DATADIR/qa_model_repository/savedmodel_float32_float32_float32 .
@@ -767,7 +723,7 @@ mkdir models models_0
 for i in graphdef ; do
     cp -r $DATADIR/qa_model_repository/${i}_float32_float32_float32 models/.
 done
-for i in onnx ; do
+for i in netdef ; do
     cp -r $DATADIR/qa_model_repository/${i}_float32_float32_float32 models_0/.
 done
 cp -r $DATADIR/qa_model_repository/savedmodel_float32_float32_float32 .
@@ -858,8 +814,8 @@ for i in plan onnx ; do
     sed -i "s/max_batch_size:.*/max_batch_size: 1/" models_0/simple_${i}_float32_float32_float32/config.pbtxt
 done
 
-# savedmodel doesn't load because it is duplicated in 2 repositories
-for i in savedmodel ; do
+# netdef doesn't load because it is duplicated in 2 repositories
+for i in netdef ; do
     cp -r $DATADIR/qa_model_repository/${i}_float32_float32_float32 models/.
     cp -r $DATADIR/qa_model_repository/${i}_float32_float32_float32 models_0/.
 done
@@ -868,7 +824,7 @@ SERVER_ARGS="--model-repository=`pwd`/models --model-repository=`pwd`/models_0 \
              --model-control-mode=explicit \
              --strict-readiness=false \
              --strict-model-config=false --exit-on-error=false \
-             --load-model=savedmodel_float32_float32_float32 \
+             --load-model=netdef_float32_float32_float32 \
              --load-model=plan_float32_float32_float32 \
              --load-model=simple_onnx_float32_float32_float32"
 SERVER_LOG="./inference_server_$LOG_IDX.log"
@@ -908,8 +864,8 @@ for i in graphdef savedmodel ; do
     cp -r $DATADIR/qa_ensemble_model_repository/qa_model_repository/simple_${i}_float32_float32_float32 models_0/.
 done
 
-# onnx doesn't load because it is duplicated in 2 repositories
-for i in onnx ; do
+# netdef doesn't load because it is duplicated in 2 repositories
+for i in netdef ; do
     cp -r $DATADIR/qa_model_repository/${i}_float32_float32_float32 models/.
     cp -r $DATADIR/qa_model_repository/${i}_float32_float32_float32 models_0/.
 done
@@ -918,7 +874,7 @@ SERVER_ARGS="--model-repository=`pwd`/models --model-repository=`pwd`/models_0 \
              --model-control-mode=explicit \
              --strict-readiness=false \
              --strict-model-config=false --exit-on-error=false \
-             --load-model=onnx_float32_float32_float32 \
+             --load-model=netdef_float32_float32_float32 \
              --load-model=graphdef_float32_float32_float32 \
              --load-model=simple_savedmodel_float32_float32_float32"
 SERVER_LOG="./inference_server_$LOG_IDX.log"
@@ -949,193 +905,10 @@ wait $SERVER_PID
 
 LOG_IDX=$((LOG_IDX+1))
 
-# LifeCycleTest.test_model_availability_on_reload
-for protocol in grpc http; do
-    if [[ $protocol == "grpc" ]]; then
-       export TRITONSERVER_USE_GRPC=1
-    fi
-    rm -fr models config.pbtxt.*
-    mkdir models
-    cp -r identity_zero_1_int32 models/. && mkdir -p models/identity_zero_1_int32/1
-
-    SERVER_ARGS="--model-repository=`pwd`/models --model-control-mode=explicit \
-                 --exit-timeout-secs=5 --strict-model-config=false \
-                 --load-model=identity_zero_1_int32 \
-                 --strict-readiness=false"
-    SERVER_LOG="./inference_server_$LOG_IDX.log"
-    run_server
-    if [ "$SERVER_PID" == "0" ]; then
-        echo -e "\n***\n*** Failed to start $SERVER\n***"
-        cat $SERVER_LOG
-        exit 1
-    fi
-
-    set +e
-    python $LC_TEST LifeCycleTest.test_model_availability_on_reload >>$CLIENT_LOG 2>&1
-    if [ $? -ne 0 ]; then
-        echo -e "\n***\n*** Test Failed\n***"
-        RET=1
-    else
-        check_test_results $CLIENT_LOG 1
-        if [ $? -ne 0 ]; then
-            cat $CLIENT_LOG
-            echo -e "\n***\n*** Test Result Verification Failed\n***"
-            RET=1
-        fi
-    fi
-    set -e
-
-    kill $SERVER_PID
-    wait $SERVER_PID
-
-    unset TRITONSERVER_USE_GRPC
-
-    LOG_IDX=$((LOG_IDX+1))
-done
-
-# LifeCycleTest.test_model_availability_on_reload_2
-for protocol in grpc http; do
-    if [[ $protocol == "grpc" ]]; then
-       export TRITONSERVER_USE_GRPC=1
-    fi
-    rm -fr models config.pbtxt.*
-    mkdir models
-    cp -r identity_zero_1_int32 models/. \
-        && mkdir -p models/identity_zero_1_int32/1 \
-        && mkdir -p models/identity_zero_1_int32/2
-    echo "version_policy: { specific { versions: [1] }}" >> models/identity_zero_1_int32/config.pbtxt
-    cp identity_zero_1_int32/config.pbtxt config.pbtxt.v2
-    echo "version_policy: { specific { versions: [2] }}" >> config.pbtxt.v2
-
-    SERVER_ARGS="--model-repository=`pwd`/models --model-control-mode=explicit \
-                 --exit-timeout-secs=5 --strict-model-config=false \
-                 --load-model=identity_zero_1_int32 \
-                 --strict-readiness=false"
-    SERVER_LOG="./inference_server_$LOG_IDX.log"
-    run_server
-    if [ "$SERVER_PID" == "0" ]; then
-        echo -e "\n***\n*** Failed to start $SERVER\n***"
-        cat $SERVER_LOG
-        exit 1
-    fi
-
-    set +e
-    python $LC_TEST LifeCycleTest.test_model_availability_on_reload_2 >>$CLIENT_LOG 2>&1
-    if [ $? -ne 0 ]; then
-        echo -e "\n***\n*** Test Failed\n***"
-        RET=1
-    else
-        check_test_results $CLIENT_LOG 1
-        if [ $? -ne 0 ]; then
-            cat $CLIENT_LOG
-            echo -e "\n***\n*** Test Result Verification Failed\n***"
-            RET=1
-        fi
-    fi
-    set -e
-
-    kill $SERVER_PID
-    wait $SERVER_PID
-
-    unset TRITONSERVER_USE_GRPC
-
-    LOG_IDX=$((LOG_IDX+1))
-done
-
-# LifeCycleTest.test_model_reload_fail
-rm -fr models config.pbtxt.*
-mkdir models
-cp -r identity_zero_1_int32 models/. \
-    && mkdir -p models/identity_zero_1_int32/1 \
-    && mkdir -p models/identity_zero_1_int32/2
-echo "version_policy: { specific { versions: [1] }}" >> models/identity_zero_1_int32/config.pbtxt
-cp identity_zero_1_int32/config.pbtxt config.pbtxt.v2.gpu && \
-    echo "version_policy: { specific { versions: [2] }}" >> config.pbtxt.v2.gpu && \
-    sed -i "s/KIND_CPU/KIND_GPU/" config.pbtxt.v2.gpu
-
-SERVER_ARGS="--model-repository=`pwd`/models --model-control-mode=explicit \
-             --exit-timeout-secs=5 --strict-model-config=false \
-             --load-model=identity_zero_1_int32 \
-             --strict-readiness=false"
-SERVER_LOG="./inference_server_$LOG_IDX.log"
-run_server
-if [ "$SERVER_PID" == "0" ]; then
-    echo -e "\n***\n*** Failed to start $SERVER\n***"
-    cat $SERVER_LOG
-    exit 1
-fi
-
-set +e
-python $LC_TEST LifeCycleTest.test_model_reload_fail >>$CLIENT_LOG 2>&1
-if [ $? -ne 0 ]; then
-    echo -e "\n***\n*** Test Failed\n***"
-    RET=1
-else
-    check_test_results $CLIENT_LOG 1
-    if [ $? -ne 0 ]; then
-        cat $CLIENT_LOG
-        echo -e "\n***\n*** Test Result Verification Failed\n***"
-        RET=1
-    fi
-fi
-set -e
-
-kill $SERVER_PID
-wait $SERVER_PID
-
-LOG_IDX=$((LOG_IDX+1))
-
-# LifeCycleTest.test_load_same_model_different_platform
-for protocol in grpc http; do
-    if [[ $protocol == "grpc" ]]; then
-       export TRITONSERVER_USE_GRPC=1
-    fi
-    rm -fr models simple_float32_float32_float32
-    mkdir models
-    # Prepare two models of different platforms, but with the same name
-    cp -r $DATADIR/qa_model_repository/plan_float32_float32_float32 models/simple_float32_float32_float32
-    sed -i "s/plan_float32_float32_float32/simple_float32_float32_float32/" models/simple_float32_float32_float32/config.pbtxt
-    cp -r $DATADIR/qa_model_repository/libtorch_float32_float32_float32 simple_float32_float32_float32
-    sed -i "s/libtorch_float32_float32_float32/simple_float32_float32_float32/" simple_float32_float32_float32/config.pbtxt
-    
-    SERVER_ARGS="--model-repository=`pwd`/models --model-control-mode=explicit \
-                 --load-model=simple_float32_float32_float32 \
-                 --exit-timeout-secs=5"
-    SERVER_LOG="./inference_server_$LOG_IDX.log"
-    run_server
-    if [ "$SERVER_PID" == "0" ]; then
-        echo -e "\n***\n*** Failed to start $SERVER\n***"
-        cat $SERVER_LOG
-        exit 1
-    fi
-
-    set +e
-    python $LC_TEST LifeCycleTest.test_load_same_model_different_platform >>$CLIENT_LOG 2>&1
-    if [ $? -ne 0 ]; then
-        echo -e "\n***\n*** Test Failed\n***"
-        RET=1
-    else
-        check_test_results $CLIENT_LOG 1
-        if [ $? -ne 0 ]; then
-            cat $CLIENT_LOG
-            echo -e "\n***\n*** Test Result Verification Failed\n***"
-            RET=1
-        fi
-    fi
-    set -e
-
-    kill $SERVER_PID
-    wait $SERVER_PID
-
-    unset TRITONSERVER_USE_GRPC
-
-    LOG_IDX=$((LOG_IDX+1))
-done 
-
 # Send HTTP request to control endpoint
 rm -fr models config.pbtxt.*
 mkdir models
-for i in graphdef savedmodel onnx plan ; do
+for i in graphdef savedmodel netdef plan ; do
     cp -r $DATADIR/qa_model_repository/${i}_float32_float32_float32 models/.
 done
 

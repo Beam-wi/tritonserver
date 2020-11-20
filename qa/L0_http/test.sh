@@ -67,7 +67,27 @@ rm -f *.log.*
 
 set -e
 
-cp -r ../ensemble_models/image_preprocess_ensemble_example/* models/.
+# Get the TensorFlow inception model
+mkdir -p models/inception_graphdef/1
+wget -O /tmp/inception_v3_2016_08_28_frozen.pb.tar.gz \
+     https://storage.googleapis.com/download.tensorflow.org/models/inception_v3_2016_08_28_frozen.pb.tar.gz
+(cd /tmp && tar xzf inception_v3_2016_08_28_frozen.pb.tar.gz)
+mv /tmp/inception_v3_2016_08_28_frozen.pb models/inception_graphdef/1/model.graphdef
+
+cp -r /data/inferenceserver/${REPO_VERSION}/qa_identity_model_repository/savedmodel_zero_1_object models/
+
+# Create model repository layout for ensemble image classification
+rm -fr models/image_preprocess_nchw_3x224x224_inception && \
+    rm -fr models/preprocess_resnet50_ensemble && \
+    cp -r ensemble_model_repository/image_preprocess_nchw_3x224x224_inception models/ && \
+    cp -r ensemble_model_repository/preprocess_resnet50_ensemble models/ && \
+    mkdir -p models/image_preprocess_nchw_3x224x224_inception/1 && \
+    mkdir -p models/preprocess_resnet50_ensemble/1
+
+# Obtain actual models
+cp -r /data/inferenceserver/${REPO_VERSION}/c2_model_store/resnet50_netdef models/ && \
+    cp ../L0_custom_image_preprocess/models/image_preprocess_nhwc_224x224x3/1/libimagepreprocess.so \
+        models/image_preprocess_nchw_3x224x224_inception/1/.
 
 CLIENT_LOG=`pwd`/client.log
 DATADIR=`pwd`/models
@@ -136,6 +156,13 @@ for i in \
     fi
 done
 
+# Test with custom model
+$SIMPLE_INFER_CLIENT_PY -v -c >> ${CLIENT_LOG}.custom 2>&1
+if [ $? -ne 0 ]; then
+    cat ${CLIENT_LOG}.custom
+    RET=1
+fi
+
 # Test while reusing the InferInput and InferRequestedOutput objects
 $SIMPLE_REUSE_INFER_OBJECTS_CLIENT_PY -v >> ${CLIENT_LOG}.reuse 2>&1
 if [ $? -ne 0 ]; then
@@ -172,6 +199,13 @@ for i in \
         RET=1
     fi
 done
+
+# Test with custom model
+$SIMPLE_INFER_CLIENT -v -c >> ${CLIENT_LOG}.c++.custom 2>&1
+if [ $? -ne 0 ]; then
+    cat ${CLIENT_LOG}.c++.custom
+    RET=1
+fi
 
 # Test while reusing the InferInput and InferRequestedOutput objects
 $SIMPLE_REUSE_INFER_OBJECTS_CLIENT -v >> ${CLIENT_LOG}.c++.reuse 2>&1
@@ -247,7 +281,7 @@ kill $SERVER_PID
 wait $SERVER_PID
 
 # Test with dynamic sequence models
-SERVER_ARGS="--model-repository=`pwd`/models"
+SERVER_ARGS="--model-repository=`pwd`/models_dyna"
 SERVER_LOG="./inference_server_dyna.log"
 CLIENT_LOG="./client_dyna.log"
 run_server

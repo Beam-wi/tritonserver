@@ -74,7 +74,6 @@ class PinnedMemoryManager {
 
  private:
   static std::unique_ptr<PinnedMemoryManager> instance_;
-  static uint64_t pinned_memory_byte_size_;
 
   std::mutex info_mtx_;
   std::map<void*, bool> memory_info_;

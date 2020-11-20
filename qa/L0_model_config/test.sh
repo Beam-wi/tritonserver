@@ -45,7 +45,7 @@ source ../common/util.sh
 
 export CUDA_VISIBLE_DEVICES=0
 
-TRIALS="tensorflow_savedmodel tensorflow_graphdef tensorrt_plan onnxruntime_onnx pytorch_libtorch custom"
+TRIALS="tensorflow_savedmodel tensorflow_graphdef tensorrt_plan caffe2_netdef onnxruntime_onnx pytorch_libtorch custom"
 
 # Copy fixed TensorRT plans into the test model repositories.
 for modelpath in \
@@ -67,13 +67,6 @@ for modelpath in \
     mkdir -p $modelpath
     cp /data/inferenceserver/${REPO_VERSION}/qa_model_repository/plan_float32_float32_float32/1/model.plan \
        $modelpath/.
-
-    # Create a dummy file which must be ignored. This test is only needed
-    # for TensorRT autofiller as it is the last backend that attempts to
-    # load the files provided in the version directory. Essentially,
-    # for autofiller of other backends, a TensorRT plan would behave
-    # like this dummy file.
-    echo "dummy_content" >> $modelpath/dummy_file.txt
 done
 
 

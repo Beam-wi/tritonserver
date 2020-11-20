@@ -51,7 +51,8 @@ _test_system_shared_memory = bool(
     int(os.environ.get('TEST_SYSTEM_SHARED_MEMORY', 0)))
 _test_cuda_shared_memory = bool(
     int(os.environ.get('TEST_CUDA_SHARED_MEMORY', 0)))
-_test_valgrind = bool(int(os.environ.get('TEST_VALGRIND', 0)))
+_test_valgrind = bool(
+    int(os.environ.get('TEST_VALGRIND', 0)))
 
 _max_sequence_idle_ms = 5000
 _valgrind_delay_ms = 50
@@ -390,8 +391,9 @@ class SequenceBatcherTestUtil(tu.TestResultCollector):
 
         """
         if (("savedmodel" not in trial) and ("graphdef" not in trial) and
-            ("custom" not in trial) and ("onnx" not in trial) and
-            ("libtorch" not in trial) and ("plan" not in trial)):
+            ("netdef" not in trial) and ("custom" not in trial) and
+            ("onnx" not in trial) and ("libtorch" not in trial) and
+            ("plan" not in trial)):
             self.assertFalse(True, "unknown trial type: " + trial)
 
         # Can only send the request exactly once since it is a
@@ -626,8 +628,9 @@ class SequenceBatcherTestUtil(tu.TestResultCollector):
 
         """
         if (("savedmodel" not in trial) and ("graphdef" not in trial) and
-            ("custom" not in trial) and ("onnx" not in trial) and
-            ("libtorch" not in trial) and ("plan" not in trial)):
+            ("netdef" not in trial) and ("custom" not in trial) and
+            ("onnx" not in trial) and ("libtorch" not in trial) and
+            ("plan" not in trial)):
             self.assertFalse(True, "unknown trial type: " + trial)
 
         self.assertFalse(

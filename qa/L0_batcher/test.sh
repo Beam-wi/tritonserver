@@ -43,10 +43,6 @@ CLIENT_LOG="./client.log"
 BATCHER_TEST=batcher_test.py
 VERIFY_TIMESTAMPS=verify_timestamps.py
 
-if [ -z "$TEST_VALGRIND" ]; then
-    TEST_VALGRIND="0"
-fi 
-
 # Add valgrind flag check
 if [ "$TEST_VALGRIND" -eq 1 ]; then
     LEAKCHECK=/usr/bin/valgrind
@@ -70,14 +66,13 @@ DATADIR=${DATADIR:="/data/inferenceserver/${REPO_VERSION}"}
 OPTDIR=${OPTDIR:="/opt"}
 SERVER=${OPTDIR}/tritonserver/bin/tritonserver
 BACKEND_DIR=${OPTDIR}/tritonserver/backends
-TF_VERSION=${TF_VERSION:=1}
-SERVER_ARGS_EXTRA="--backend-directory=${BACKEND_DIR} --backend-config=tensorflow,version=${TF_VERSION}"
+
 source ../common/util.sh
 
 RET=0
 
 # If BACKENDS not specified, set to all
-BACKENDS=${BACKENDS:="graphdef savedmodel onnx libtorch plan custom"}
+BACKENDS=${BACKENDS:="graphdef savedmodel netdef onnx libtorch plan custom"}
 export BACKENDS
 
 # Basic batcher tests
@@ -96,8 +91,7 @@ NO_DELAY_TESTS=${NO_DELAY_TESTS:="test_static_batch_preferred \
 # Tests that use scheduler delay
 DELAY_TESTS=${DELAY_TESTS:="test_multi_batch_delayed_sum_gt_max_preferred \
                         test_multi_batch_use_biggest_preferred \
-                        test_multi_batch_use_best_preferred \
-                        test_multi_batch_delayed_use_max_batch"}
+                        test_multi_batch_use_best_preferred"}
 
 # Tests with different shapes
 DIFFERENT_SHAPE_TESTS=${DIFFERENT_SHAPE_TESTS:="test_multi_batch_not_preferred_different_shape \
@@ -161,7 +155,7 @@ for model_type in FIXED VARIABLE; do
     export BATCHER_TYPE=$model_type
     MODEL_PATH=models && [[ "$model_type" == "VARIABLE" ]] && MODEL_PATH=var_models
     for i in $NO_DELAY_TESTS ; do
-        SERVER_ARGS="--model-repository=`pwd`/$MODEL_PATH ${SERVER_ARGS_EXTRA}"
+        SERVER_ARGS="--model-repository=`pwd`/$MODEL_PATH --backend-directory=${BACKEND_DIR}"
         SERVER_LOG="./$i.$model_type.serverlog"
         
         if [ "$TEST_VALGRIND" -eq 1 ]; then
@@ -213,9 +207,8 @@ for model_type in FIXED VARIABLE; do
     for i in $DELAY_TESTS ; do
         export TRITONSERVER_DELAY_SCHEDULER=6 &&
             [[ "$i" != "test_multi_batch_use_biggest_preferred" ]] && export TRITONSERVER_DELAY_SCHEDULER=3 &&
-            [[ "$i" != "test_multi_batch_use_best_preferred" ]] &&
-            [[ "$i" != "test_multi_batch_delayed_use_max_batch" ]] && export TRITONSERVER_DELAY_SCHEDULER=2
-        SERVER_ARGS="--model-repository=`pwd`/$MODEL_PATH ${SERVER_ARGS_EXTRA}"
+            [[ "$i" != "test_multi_batch_use_best_preferred" ]] && export TRITONSERVER_DELAY_SCHEDULER=2
+        SERVER_ARGS="--model-repository=`pwd`/$MODEL_PATH --backend-directory=${BACKEND_DIR}"
         SERVER_LOG="./$i.$model_type.serverlog"
         
         if [ "$TEST_VALGRIND" -eq 1 ]; then
@@ -266,7 +259,7 @@ done
 
 export BATCHER_TYPE=VARIABLE
 for i in $DIFFERENT_SHAPE_TESTS ; do
-    SERVER_ARGS="--model-repository=`pwd`/var_models ${SERVER_ARGS_EXTRA}"
+    SERVER_ARGS="--model-repository=`pwd`/var_models --backend-directory=${BACKEND_DIR}"
     SERVER_LOG="./$i.VARIABLE.serverlog"
     
     if [ "$TEST_VALGRIND" -eq 1 ]; then        
@@ -320,7 +313,7 @@ export BATCHER_TYPE=VARIABLE
 for i in \
         test_multi_batch_delayed_preferred_different_shape ; do
     export TRITONSERVER_DELAY_SCHEDULER=4
-    SERVER_ARGS="--model-repository=`pwd`/var_models ${SERVER_ARGS_EXTRA}"
+    SERVER_ARGS="--model-repository=`pwd`/var_models --backend-directory=${BACKEND_DIR}"
     SERVER_LOG="./$i.VARIABLE.serverlog"
     
     if [ "$TEST_VALGRIND" -eq 1 ]; then      
@@ -401,7 +394,7 @@ if [[ $BACKENDS == *"custom"* ]]; then
     export TRITONSERVER_DELAY_SCHEDULER=12
 
     # not preserve
-    SERVER_ARGS="--trace-file=not_preserve.log --trace-level=MIN --trace-rate=1 --model-repository=`pwd`/custom_models  ${SERVER_ARGS_EXTRA}"
+    SERVER_ARGS="--trace-file=not_preserve.log --trace-level=MIN --trace-rate=1 --model-repository=`pwd`/custom_models --backend-directory=${BACKEND_DIR}"
     SERVER_LOG="./not_preserve.serverlog"
     
     if [ "$TEST_VALGRIND" -eq 1 ]; then
@@ -457,7 +450,7 @@ if [[ $BACKENDS == *"custom"* ]]; then
     (cd custom_models/custom_zero_1_float32 && \
             sed -i "s/dynamic_batching.*/dynamic_batching { preferred_batch_size: [ 4 ] preserve_ordering: true }/g" config.pbtxt)
 
-    SERVER_ARGS="--trace-file=preserve.log --trace-level=MIN --trace-rate=1 --model-repository=`pwd`/custom_models  ${SERVER_ARGS_EXTRA}"
+    SERVER_ARGS="--trace-file=preserve.log --trace-level=MIN --trace-rate=1 --model-repository=`pwd`/custom_models --backend-directory=${BACKEND_DIR}"
     SERVER_LOG="./preserve.serverlog"
 
     if [ "$TEST_VALGRIND" -eq 1 ]; then     

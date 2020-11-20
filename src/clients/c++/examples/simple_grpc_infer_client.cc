@@ -96,6 +96,7 @@ int
 main(int argc, char** argv)
 {
   bool verbose = false;
+  bool use_custom_model = false;
   std::string url("localhost:8001");
   nic::Headers http_headers;
   uint32_t client_timeout = 0;
@@ -112,7 +113,8 @@ main(int argc, char** argv)
 
   // Parse commandline...
   int opt;
-  while ((opt = getopt_long(argc, argv, "vu:t:H:", long_options, NULL)) != -1) {
+  while ((opt = getopt_long(argc, argv, "vcu:t:H:", long_options, NULL)) !=
+         -1) {
     switch (opt) {
       case 0:
         use_ssl = true;
@@ -128,6 +130,9 @@ main(int argc, char** argv)
         break;
       case 'v':
         verbose = true;
+        break;
+      case 'c':
+        use_custom_model = true;
         break;
       case 'u':
         url = optarg;
@@ -151,7 +156,7 @@ main(int argc, char** argv)
   // each and returns 2 output tensors of 16 integers each. One output
   // tensor is the element-wise sum of the inputs and one output is
   // the element-wise difference.
-  std::string model_name = "simple";
+  std::string model_name = use_custom_model ? "simple_custom" : "simple";
   std::string model_version = "";
 
   // Create a InferenceServerGrpcClient instance to communicate with the

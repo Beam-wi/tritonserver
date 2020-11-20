@@ -49,15 +49,11 @@ if [ -z "$TEST_CUDA_SHARED_MEMORY" ]; then
     TEST_CUDA_SHARED_MEMORY="0"
 fi
 
-if [ -z "$TEST_VALGRIND" ]; then
-    TEST_VALGRIND="0"
-fi 
-
 if [ "$TEST_VALGRIND" -eq 1 ]; then
     LEAKCHECK_LOG_BASE="./valgrind_test"
     LEAKCHECK=/usr/bin/valgrind
     LEAKCHECK_ARGS_BASE="--leak-check=full --show-leak-kinds=definite --max-threads=3000"
-    SERVER_TIMEOUT=3600
+    SERVER_TIMEOUT=1200
     rm -f $LEAKCHECK_LOG_BASE*
 fi
 
@@ -70,11 +66,9 @@ DATADIR=${DATADIR:="/data/inferenceserver/${REPO_VERSION}"}
 OPTDIR=${OPTDIR:="/opt"}
 SERVER=${OPTDIR}/tritonserver/bin/tritonserver
 BACKEND_DIR=${OPTDIR}/tritonserver/backends
-TF_VERSION=${TF_VERSION:=1}
 
 # Allow more time to exit. Ensemble brings in too many models
-SERVER_ARGS_EXTRA="--exit-timeout-secs=120 --backend-directory=${BACKEND_DIR} --backend-config=tensorflow,version=${TF_VERSION}"
-SERVER_ARGS="--model-repository=${MODELDIR} ${SERVER_ARGS_EXTRA}"
+SERVER_ARGS="--model-repository=${MODELDIR} --exit-timeout-secs=120 --backend-directory=${BACKEND_DIR}"
 SERVER_LOG_BASE="./inference_server"
 source ../common/util.sh
 
@@ -93,7 +87,7 @@ if [ "$TRITON_SERVER_CPU_ONLY" == "1" ]; then
 fi
 
 # If BACKENDS not specified, set to all
-BACKENDS=${BACKENDS:="graphdef savedmodel onnx libtorch plan custom python"}
+BACKENDS=${BACKENDS:="graphdef savedmodel netdef onnx libtorch plan custom python"}
 export BACKENDS
 
 # If ENSEMBLES not specified, set to 1
@@ -109,7 +103,7 @@ for TARGET in cpu gpu; do
         fi
         # set strict readiness=false on CPU-only device to allow
         # unsuccessful load of TensorRT plans, which require GPU.
-        SERVER_ARGS="--model-repository=${MODELDIR} --strict-readiness=false --exit-on-error=false ${SERVER_ARGS_EXTRA}"
+        SERVER_ARGS="--model-repository=${MODELDIR} --exit-timeout-secs=120 --strict-readiness=false --exit-on-error=false  --backend-directory=${BACKEND_DIR}"
     fi
 
     SERVER_LOG=$SERVER_LOG_BASE.${TARGET}.log
@@ -181,7 +175,7 @@ for TARGET in cpu gpu; do
           ENSEMBLE_MODELS="${ENSEMBLE_MODELS} batch_to_nobatch_float32_float32_float32 batch_to_nobatch_nobatch_float32_float32_float32 nobatch_to_batch_float32_float32_float32 nobatch_to_batch_nobatch_float32_float32_float32 mix_nobatch_batch_float32_float32_float32"
         fi
 
-        if [[ $BACKENDS == *"savedmodel"* ]] ; then
+        if [[ $BACKENDS == *"savedmodel"* ]] && [[ $BACKENDS == *"netdef"* ]] ; then
           ENSEMBLE_MODELS="${ENSEMBLE_MODELS} mix_platform_float32_float32_float32 mix_ensemble_int32_float32_float32"
         fi
 

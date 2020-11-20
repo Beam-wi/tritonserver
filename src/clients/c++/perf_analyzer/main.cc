@@ -25,8 +25,6 @@
 // OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
 #include <getopt.h>
-#include <signal.h>
-#include <algorithm>
 
 #include "src/clients/c++/perf_analyzer/concurrency_manager.h"
 #include "src/clients/c++/perf_analyzer/custom_load_manager.h"
@@ -34,8 +32,6 @@
 #include "src/clients/c++/perf_analyzer/model_parser.h"
 #include "src/clients/c++/perf_analyzer/perf_utils.h"
 #include "src/clients/c++/perf_analyzer/request_rate_manager.h"
-
-namespace perfanalyzer {
 
 volatile bool early_exit = false;
 
@@ -54,7 +50,6 @@ SignalHandler(int signum)
     exit(0);
   }
 }
-}  // namespace perfanalyzer
 
 //==============================================================================
 // Perf Analyzer
@@ -212,11 +207,8 @@ Usage(char** argv, const std::string& msg = std::string())
 
   std::cerr << "Usage: " << argv[0] << " [options]" << std::endl;
   std::cerr << "==== SYNOPSIS ====\n \n";
-  std::cerr << "\t--service-kind <\"triton\"|\"tfserving\"|\"torchserve\">"
-            << std::endl;
   std::cerr << "\t-m <model name>" << std::endl;
   std::cerr << "\t-x <model version>" << std::endl;
-  std::cerr << "\t--model-signature-name <model signature name>" << std::endl;
   std::cerr << "\t-v" << std::endl;
   std::cerr << std::endl;
   std::cerr << "I. MEASUREMENT PARAMETERS: " << std::endl;
@@ -275,19 +267,6 @@ Usage(char** argv, const std::string& msg = std::string())
   std::cerr << "==== OPTIONS ==== \n \n";
 
   std::cerr
-      << FormatMessage(
-             " --service-kind: Describes the kind of service perf_analyzer "
-             "to generate load for. The options are \"triton\", \"tfserving\" "
-             "and \"torchserve\". Default value is \"triton\". Note in order "
-             "to use \"torchserve\" backend --input-data option must point to "
-             "a json file holding data in the following format {\"data\" : "
-             "[{\"TORCHSERVE_INPUT\" : [\"<complete path to the content "
-             "file>\"]}, {...}...]}. The type of file here will depend on the "
-             "model.",
-             18)
-      << std::endl;
-
-  std::cerr
       << std::setw(9) << std::left << " -m: "
       << FormatMessage(
              "This is a required argument and is used to specify the model"
@@ -300,13 +279,6 @@ Usage(char** argv, const std::string& msg = std::string())
                    " the most recent version (that is, the highest numbered"
                    " version) of the model will be used.",
                    9)
-            << std::endl;
-  std::cerr << FormatMessage(
-                   " --model-signature-name: The signature name of the saved "
-                   "model to use. Default value is \"serving_default\". This "
-                   "option will be ignored if --service-kind is not "
-                   "\"tfserving\".",
-                   18)
             << std::endl;
   std::cerr << std::setw(9) << std::left
             << " -v: " << FormatMessage("Enables verbose mode.", 9)
@@ -418,6 +390,7 @@ Usage(char** argv, const std::string& msg = std::string())
                    18)
             << std::endl;
 
+
   std::cerr
       << FormatMessage(
              " --latency-threshold (-l): Sets the limit on the observed "
@@ -493,8 +466,7 @@ Usage(char** argv, const std::string& msg = std::string())
              "round-robin fashion for every new sequence. Muliple json files "
              "can also be provided (--input-data json_file1 --input-data "
              "json-file2 and so on) and the analyzer will append data streams "
-             "from each file. When using --service-kind=torchserve make sure "
-             "this option points to a json file. Default is \"random\".",
+             "from each file. Default is \"random\".",
              18)
       << std::endl;
   std::cerr << FormatMessage(
@@ -553,10 +525,8 @@ Usage(char** argv, const std::string& msg = std::string())
   std::cerr << "III. SERVER DETAILS: " << std::endl;
   std::cerr << std::setw(9) << std::left << " -u: "
             << FormatMessage(
-                   "Specify URL to the server. When using triton default is "
-                   "\"localhost:8000\" if using HTTP and \"localhost:8001\" "
-                   "if using gRPC. When using tfserving default is "
-                   "\"localhost:8500\". ",
+                   "Specify URL to the server. Default is \"localhost:8000\" "
+                   "if using HTTP and \"localhost:8001\" if using gRPC. ",
                    9)
             << std::endl;
   std::cerr << std::setw(9) << std::left << " -i: "
@@ -597,7 +567,6 @@ Usage(char** argv, const std::string& msg = std::string())
 int
 main(int argc, char** argv)
 {
-  cb::BackendKind kind(cb::BackendKind::TRITON);
   bool verbose = false;
   bool extra_verbose = false;
   bool streaming = false;
@@ -605,9 +574,8 @@ main(int argc, char** argv)
   // average length of a sentence
   size_t sequence_length = 20;
   int32_t percentile = -1;
-  uint64_t latency_threshold_ms = pa::NO_LIMIT;
+  uint64_t latency_threshold_ms = NO_LIMIT;
   int32_t batch_size = 1;
-  bool using_batch_size = false;
   uint64_t concurrency_range[3] = {1, 1, 1};
   double request_rate_range[3] = {1.0, 1.0, 1.0};
   double stability_threshold = 0.1;
@@ -615,12 +583,11 @@ main(int argc, char** argv)
   size_t max_trials = 10;
   std::string model_name;
   std::string model_version;
-  std::string model_signature_name("serving_default");
   std::string url("localhost:8000");
   std::string filename("");
-  cb::ProtocolType protocol = cb::ProtocolType::HTTP;
-  std::shared_ptr<cb::Headers> http_headers(new cb::Headers());
-  pa::SharedMemoryType shared_memory_type = pa::NO_SHARED_MEMORY;
+  ProtocolType protocol = ProtocolType::HTTP;
+  std::shared_ptr<nic::Headers> http_headers(new nic::Headers());
+  SharedMemoryType shared_memory_type = SharedMemoryType::NO_SHARED_MEMORY;
   size_t output_shm_size = 100 * 1024;
   std::unordered_map<std::string, std::vector<int64_t>> input_shapes;
   size_t string_length = 128;
@@ -637,14 +604,15 @@ main(int argc, char** argv)
   bool using_concurrency_range = false;
   bool using_request_rate_range = false;
   bool using_custom_intervals = false;
-  pa::SearchMode search_mode = pa::SearchMode::LINEAR;
-  pa::Distribution request_distribution = pa::Distribution::CONSTANT;
+  SearchMode search_mode = SearchMode::LINEAR;
+  Distribution request_distribution = Distribution::CONSTANT;
   std::string request_intervals_file("");
 
   // Required for detecting the use of conflicting options
   bool using_old_options = false;
   bool url_specified = false;
   bool max_threads_specified = false;
+
 
   // {name, has_arg, *flag, val}
   static struct option long_options[] = {
@@ -671,8 +639,6 @@ main(int argc, char** argv)
       {"request-intervals", 1, 0, 20},
       {"shared-memory", 1, 0, 21},
       {"output-shared-memory-size", 1, 0, 22},
-      {"service-kind", 1, 0, 23},
-      {"model-signature-name", 1, 0, 24},
       {0, 0, 0, 0}};
 
   // Parse commandline...
@@ -777,7 +743,7 @@ main(int argc, char** argv)
       case 11: {
         std::string arg = optarg;
         // Check whether the argument is a directory
-        if (pa::IsDirectory(arg) || pa::IsFile(arg)) {
+        if (IsDirectory(arg) || IsFile(arg)) {
           user_data.push_back(optarg);
         } else if (arg.compare("zero") == 0) {
           zero_input = true;
@@ -841,15 +807,15 @@ main(int argc, char** argv)
         break;
       }
       case 18: {
-        search_mode = pa::SearchMode::BINARY;
+        search_mode = SearchMode::BINARY;
         break;
       }
       case 19: {
         std::string arg = optarg;
         if (arg.compare("poisson") == 0) {
-          request_distribution = pa::Distribution::POISSON;
+          request_distribution = Distribution::POISSON;
         } else if (arg.compare("constant") == 0) {
-          request_distribution = pa::Distribution::CONSTANT;
+          request_distribution = Distribution::CONSTANT;
         } else {
           Usage(
               argv, "unsupported request distribution provided " +
@@ -864,10 +830,10 @@ main(int argc, char** argv)
       case 21: {
         std::string arg = optarg;
         if (arg.compare("system") == 0) {
-          shared_memory_type = pa::SharedMemoryType::SYSTEM_SHARED_MEMORY;
+          shared_memory_type = SharedMemoryType::SYSTEM_SHARED_MEMORY;
         } else if (arg.compare("cuda") == 0) {
 #ifdef TRITON_ENABLE_GPU
-          shared_memory_type = pa::SharedMemoryType::CUDA_SHARED_MEMORY;
+          shared_memory_type = SharedMemoryType::CUDA_SHARED_MEMORY;
 #else
           Usage(
               argv,
@@ -876,25 +842,8 @@ main(int argc, char** argv)
         }
         break;
       }
-      case 22: {
+      case 22:
         output_shm_size = std::atoi(optarg);
-        break;
-      }
-      case 23: {
-        std::string arg = optarg;
-        if (arg.compare("triton") == 0) {
-          kind = cb::TRITON;
-        } else if (arg.compare("tfserving") == 0) {
-          kind = cb::TENSORFLOW_SERVING;
-        } else if (arg.compare("torchserve") == 0) {
-          kind = cb::TORCHSERVE;
-        } else {
-          Usage(argv, "unsupported --service-kind specified");
-        }
-        break;
-      }
-      case 24:
-        model_signature_name = optarg;
         break;
       case 'v':
         extra_verbose = verbose;
@@ -919,7 +868,6 @@ main(int argc, char** argv)
         break;
       case 'b':
         batch_size = std::atoi(optarg);
-        using_batch_size = true;
         break;
       case 't':
         using_old_options = true;
@@ -929,7 +877,7 @@ main(int argc, char** argv)
         measurement_window_ms = std::atoi(optarg);
         break;
       case 'i':
-        protocol = pa::ParseProtocol(optarg);
+        protocol = ParseProtocol(optarg);
         break;
       case 'H': {
         std::string arg = optarg;
@@ -978,10 +926,10 @@ main(int argc, char** argv)
   if (request_rate_range[SEARCH_RANGE::kSTART] <= 0) {
     Usage(argv, "The start of the search range must be > 0");
   }
-  if (protocol == cb::ProtocolType::UNKNOWN) {
+  if (protocol == ProtocolType::UNKNOWN) {
     Usage(argv, "protocol should be either HTTP or gRPC");
   }
-  if (streaming && (protocol != cb::ProtocolType::GRPC)) {
+  if (streaming && (protocol != ProtocolType::GRPC)) {
     Usage(argv, "streaming is only allowed with gRPC protocol");
   }
   if (max_threads == 0) {
@@ -1002,6 +950,7 @@ main(int argc, char** argv)
   if (async && forced_sync) {
     Usage(argv, "Both --async and --sync can not be specified simultaneously.");
   }
+
 
   if (using_concurrency_range && using_old_options) {
     Usage(argv, "can not use deprecated options with --concurrency-range");
@@ -1035,27 +984,27 @@ main(int argc, char** argv)
         "along with --request-intervals");
   }
 
-  if (((concurrency_range[SEARCH_RANGE::kEND] == pa::NO_LIMIT) ||
+  if (((concurrency_range[SEARCH_RANGE::kEND] == NO_LIMIT) ||
        (request_rate_range[SEARCH_RANGE::kEND] ==
-        static_cast<double>(pa::NO_LIMIT))) &&
-      (latency_threshold_ms == pa::NO_LIMIT)) {
+        static_cast<double>(NO_LIMIT))) &&
+      (latency_threshold_ms == NO_LIMIT)) {
     Usage(
         argv,
         "The end of the search range and the latency limit can not be both 0 "
         "(or 0.0) simultaneously");
   }
 
-  if (((concurrency_range[SEARCH_RANGE::kEND] == pa::NO_LIMIT) ||
+  if (((concurrency_range[SEARCH_RANGE::kEND] == NO_LIMIT) ||
        (request_rate_range[SEARCH_RANGE::kEND] ==
-        static_cast<double>(pa::NO_LIMIT))) &&
-      (search_mode == pa::SearchMode::BINARY)) {
+        static_cast<double>(NO_LIMIT))) &&
+      (search_mode == SearchMode::BINARY)) {
     Usage(
         argv,
         "The end of the range can not be 0 (or 0.0) for binary search mode.");
   }
 
-  if ((search_mode == pa::SearchMode::BINARY) &&
-      (latency_threshold_ms == pa::NO_LIMIT)) {
+  if ((search_mode == SearchMode::BINARY) &&
+      (latency_threshold_ms == NO_LIMIT)) {
     Usage(argv, "The latency threshold can not be 0 for binary search mode.");
   }
 
@@ -1063,52 +1012,21 @@ main(int argc, char** argv)
         concurrency_range[SEARCH_RANGE::kSTART]) ||
        (request_rate_range[SEARCH_RANGE::kEND] <
         request_rate_range[SEARCH_RANGE::kSTART])) &&
-      (search_mode == pa::SearchMode::BINARY)) {
+      (search_mode == SearchMode::BINARY)) {
     Usage(
         argv,
         "The end of the range can not be less than start of the range for "
         "binary search mode.");
   }
 
-  if (!url_specified && (protocol == cb::ProtocolType::GRPC)) {
-    if (kind == cb::BackendKind::TRITON) {
-      url = "localhost:8001";
-    } else if (kind == cb::BackendKind::TENSORFLOW_SERVING) {
-      url = "localhost:8500";
-    }
-  }
-
-  if (kind == cb::TENSORFLOW_SERVING) {
-    if (protocol != cb::ProtocolType::GRPC) {
-      std::cerr
-          << "perf_analyzer supports only grpc protocol for TensorFlow Serving."
-          << std::endl;
-      return 1;
-    } else if (streaming) {
-      std::cerr
-          << "perf_analyzer does not support streaming for TensorFlow Serving."
-          << std::endl;
-      return 1;
-    } else if (async) {
-      std::cerr
-          << "perf_analyzer does not support async API for TensorFlow Serving."
-          << std::endl;
-      return 1;
-    } else if (!using_batch_size) {
-      batch_size = 0;
-    }
-  } else if (kind == cb::TORCHSERVE) {
-    if (user_data.empty()) {
-      std::cerr << "--input-data should be provided with a json file with "
-                   "input data for torchserve"
-                << std::endl;
-      return 1;
-    }
+  if (!url_specified && (protocol == ProtocolType::GRPC)) {
+    url = "localhost:8001";
   }
 
   bool target_concurrency =
       (using_concurrency_range || using_old_options ||
        !(using_request_rate_range || using_custom_intervals));
+
 
   // Overriding the max_threads default for request_rate search
   if (!max_threads_specified && target_concurrency) {
@@ -1116,51 +1034,55 @@ main(int argc, char** argv)
   }
 
   // trap SIGINT to allow threads to exit gracefully
-  signal(SIGINT, pa::SignalHandler);
+  signal(SIGINT, SignalHandler);
 
-  std::shared_ptr<cb::ClientBackendFactory> factory;
+  std::shared_ptr<TritonClientFactory> factory;
+  // Disabling verbosity in the clients to prevent huge dump of
+  // messages.
   FAIL_IF_ERR(
-      cb::ClientBackendFactory::Create(
-          kind, url, protocol, http_headers, extra_verbose, &factory),
+      TritonClientFactory::Create(
+          url, protocol, http_headers, extra_verbose, &factory),
       "failed to create client factory");
 
-  std::unique_ptr<cb::ClientBackend> backend;
+  std::unique_ptr<TritonClientWrapper> triton_client_wrapper;
   FAIL_IF_ERR(
-      factory->CreateClientBackend(&backend),
-      "failed to create triton client backend");
+      factory->CreateTritonClient(&triton_client_wrapper),
+      "failed to create triton client");
 
-  std::shared_ptr<pa::ModelParser> parser =
-      std::make_shared<pa::ModelParser>(kind);
-  if (kind == cb::BackendKind::TRITON) {
+  std::shared_ptr<ModelParser> parser = std::make_shared<ModelParser>();
+  if (protocol == ProtocolType::HTTP) {
     rapidjson::Document model_metadata;
     FAIL_IF_ERR(
-        backend->ModelMetadata(&model_metadata, model_name, model_version),
+        triton_client_wrapper->ModelMetadata(
+            &model_metadata, model_name, model_version),
         "failed to get model metadata");
     rapidjson::Document model_config;
     FAIL_IF_ERR(
-        backend->ModelConfig(&model_config, model_name, model_version),
+        triton_client_wrapper->ModelConfig(
+            &model_config, model_name, model_version),
         "failed to get model config");
     FAIL_IF_ERR(
-        parser->InitTriton(
-            model_metadata, model_config, model_version, input_shapes, backend),
-        "failed to create model parser");
-  } else if (kind == cb::BackendKind::TENSORFLOW_SERVING) {
-    rapidjson::Document model_metadata;
-    FAIL_IF_ERR(
-        backend->ModelMetadata(&model_metadata, model_name, model_version),
-        "failed to get model metadata");
-    FAIL_IF_ERR(
-        parser->InitTFServe(
-            model_metadata, model_name, model_version, model_signature_name,
-            batch_size, input_shapes, backend),
-        "failed to create model parser");
-  } else if (kind == cb::BackendKind::TORCHSERVE) {
-    FAIL_IF_ERR(
-        parser->InitTorchServe(model_name, model_version, batch_size),
+        parser->Init(
+            model_metadata, model_config, model_version, input_shapes,
+            triton_client_wrapper),
         "failed to create model parser");
   } else {
-    std::cerr << "unsupported client backend kind" << std::endl;
-    return 1;
+    inference::ModelMetadataResponse model_metadata;
+    FAIL_IF_ERR(
+        triton_client_wrapper->ModelMetadata(
+            &model_metadata, model_name, model_version),
+        "failed to get model metadata");
+
+    inference::ModelConfigResponse model_config;
+    FAIL_IF_ERR(
+        triton_client_wrapper->ModelConfig(
+            &model_config, model_name, model_version),
+        "failed to get model config");
+    FAIL_IF_ERR(
+        parser->Init(
+            model_metadata, model_config.config(), model_version, input_shapes,
+            triton_client_wrapper),
+        "failed to create model parser");
   }
 
   if ((parser->MaxBatchSize() == 0) && batch_size > 1) {
@@ -1171,8 +1093,8 @@ main(int argc, char** argv)
   }
 
   // Change the default value for the --async option for sequential models
-  if ((parser->SchedulerType() == pa::ModelParser::SEQUENCE) ||
-      (parser->SchedulerType() == pa::ModelParser::ENSEMBLE_SEQUENCE)) {
+  if ((parser->SchedulerType() == ModelParser::SEQUENCE) ||
+      (parser->SchedulerType() == ModelParser::ENSEMBLE_SEQUENCE)) {
     if (!async) {
       async = forced_sync ? false : true;
     }
@@ -1192,12 +1114,12 @@ main(int argc, char** argv)
     async = true;
   }
 
-  std::unique_ptr<pa::LoadManager> manager;
+  std::unique_ptr<LoadManager> manager;
 
   if (target_concurrency) {
-    if ((parser->SchedulerType() == pa::ModelParser::SEQUENCE) ||
-        (parser->SchedulerType() == pa::ModelParser::ENSEMBLE_SEQUENCE)) {
-      if (concurrency_range[SEARCH_RANGE::kEND] == pa::NO_LIMIT && async) {
+    if ((parser->SchedulerType() == ModelParser::SEQUENCE) ||
+        (parser->SchedulerType() == ModelParser::ENSEMBLE_SEQUENCE)) {
+      if (concurrency_range[SEARCH_RANGE::kEND] == NO_LIMIT && async) {
         std::cerr << "The 'end' concurrency can not be 0 for sequence "
                      "models when using asynchronous API."
                   << std::endl;
@@ -1208,8 +1130,9 @@ main(int argc, char** argv)
         concurrency_range[SEARCH_RANGE::kSTART],
         concurrency_range[SEARCH_RANGE::kEND]);
 
+
     if (!async) {
-      if (concurrency_range[SEARCH_RANGE::kEND] == pa::NO_LIMIT) {
+      if (concurrency_range[SEARCH_RANGE::kEND] == NO_LIMIT) {
         std::cerr
             << "WARNING: The maximum attainable concurrency will be limited by "
                "max_threads specification."
@@ -1231,7 +1154,7 @@ main(int argc, char** argv)
       }
     }
     FAIL_IF_ERR(
-        pa::ConcurrencyManager::Create(
+        ConcurrencyManager::Create(
             async, streaming, batch_size, max_threads, max_concurrency,
             sequence_length, string_length, string_data, zero_input, user_data,
             shared_memory_type, output_shm_size, parser, factory, &manager),
@@ -1239,7 +1162,7 @@ main(int argc, char** argv)
 
   } else if (using_request_rate_range) {
     FAIL_IF_ERR(
-        pa::RequestRateManager::Create(
+        RequestRateManager::Create(
             async, streaming, measurement_window_ms, request_distribution,
             batch_size, max_threads, num_of_sequences, sequence_length,
             string_length, string_data, zero_input, user_data,
@@ -1248,7 +1171,7 @@ main(int argc, char** argv)
 
   } else {
     FAIL_IF_ERR(
-        pa::CustomLoadManager::Create(
+        CustomLoadManager::Create(
             async, streaming, measurement_window_ms, request_intervals_file,
             batch_size, max_threads, num_of_sequences, sequence_length,
             string_length, string_data, zero_input, user_data,
@@ -1256,25 +1179,23 @@ main(int argc, char** argv)
         "failed to create custom load manager");
   }
 
-  std::unique_ptr<pa::InferenceProfiler> profiler;
+  std::unique_ptr<InferenceProfiler> profiler;
   FAIL_IF_ERR(
-      pa::InferenceProfiler::Create(
+      InferenceProfiler::Create(
           verbose, stability_threshold, measurement_window_ms, max_trials,
           percentile, latency_threshold_ms, protocol, parser,
-          std::move(backend), std::move(manager), &profiler),
+          std::move(triton_client_wrapper), std::move(manager), &profiler),
       "failed to create profiler");
 
   // pre-run report
-  std::cout << "*** Measurement Settings ***" << std::endl;
-  if (kind == cb::BackendKind::TRITON || using_batch_size) {
-    std::cout << "  Batch size: " << batch_size << std::endl;
-  }
-  std::cout << "  Measurement window: " << measurement_window_ms << " msec"
+  std::cout << "*** Measurement Settings ***" << std::endl
+            << "  Batch size: " << batch_size << std::endl
+            << "  Measurement window: " << measurement_window_ms << " msec"
             << std::endl;
   if (concurrency_range[SEARCH_RANGE::kEND] != 1) {
     std::cout << "  Latency limit: " << latency_threshold_ms << " msec"
               << std::endl;
-    if (concurrency_range[SEARCH_RANGE::kEND] != pa::NO_LIMIT) {
+    if (concurrency_range[SEARCH_RANGE::kEND] != NO_LIMIT) {
       std::cout << "  Concurrency limit: "
                 << std::max(
                        concurrency_range[SEARCH_RANGE::kSTART],
@@ -1286,7 +1207,7 @@ main(int argc, char** argv)
     std::cout << "  Latency limit: " << latency_threshold_ms << " msec"
               << std::endl;
     if (request_rate_range[SEARCH_RANGE::kEND] !=
-        static_cast<double>(pa::NO_LIMIT)) {
+        static_cast<double>(NO_LIMIT)) {
       std::cout << "  Request Rate limit: "
                 << std::max(
                        request_rate_range[SEARCH_RANGE::kSTART],
@@ -1295,7 +1216,7 @@ main(int argc, char** argv)
     }
   }
   if (using_request_rate_range) {
-    if (request_distribution == pa::Distribution::POISSON) {
+    if (request_distribution == Distribution::POISSON) {
       std::cout << "  Using poisson distribution on request generation"
                 << std::endl;
     } else {
@@ -1303,7 +1224,7 @@ main(int argc, char** argv)
                 << std::endl;
     }
   }
-  if (search_mode == pa::SearchMode::BINARY) {
+  if (search_mode == SearchMode::BINARY) {
     std::cout << "  Using Binary Search algorithm" << std::endl;
   }
   if (async) {
@@ -1324,14 +1245,14 @@ main(int argc, char** argv)
   }
   std::cout << std::endl;
 
-  std::vector<pa::PerfStatus> summary;
+  std::vector<PerfStatus> summary;
 
   if (using_custom_intervals) {
     // Will be using user-provided time intervals, hence no control variable.
-    search_mode = pa::SearchMode::NONE;
+    search_mode = SearchMode::NONE;
   }
 
-  cb::Error err;
+  nic::Error err;
   if (target_concurrency) {
     err = profiler->Profile<size_t>(
         concurrency_range[SEARCH_RANGE::kSTART],
@@ -1348,7 +1269,7 @@ main(int argc, char** argv)
     std::cerr << err << std::endl;
     // In the case of early_exit, the thread does not return and continues to
     // report the summary
-    if (!pa::early_exit) {
+    if (!early_exit) {
       return 1;
     }
   }
@@ -1361,7 +1282,7 @@ main(int argc, char** argv)
       std::cout << "p" << percentile << " Batch Latency" << std::endl;
     }
 
-    for (pa::PerfStatus& status : summary) {
+    for (PerfStatus& status : summary) {
       if (target_concurrency) {
         std::cout << "Concurrency: " << status.concurrency << ", ";
       } else {
@@ -1380,13 +1301,10 @@ main(int argc, char** argv)
       } else {
         ofs << "Request Rate,";
       }
-      ofs << "Inferences/Second,Client Send,";
-      if (profiler->IncludeServerStats()) {
-        ofs << "Network+Server Send/Recv,Server Queue,"
-            << "Server Compute Input,Server Compute Infer,"
-            << "Server Compute Output,";
-      }
-      ofs << "Client Recv";
+      ofs << "Inferences/Second,Client Send,"
+          << "Network+Server Send/Recv,Server Queue,"
+          << "Server Compute Input,Server Compute Infer,"
+          << "Server Compute Output,Client Recv";
       for (const auto& percentile :
            summary[0].client_stats.percentile_latency_ns) {
         ofs << ",p" << percentile.first << " latency";
@@ -1396,11 +1314,36 @@ main(int argc, char** argv)
       // Sort summary results in order of increasing infer/sec.
       std::sort(
           summary.begin(), summary.end(),
-          [](const pa::PerfStatus& a, const pa::PerfStatus& b) -> bool {
+          [](const PerfStatus& a, const PerfStatus& b) -> bool {
             return a.client_stats.infer_per_sec < b.client_stats.infer_per_sec;
           });
 
-      for (pa::PerfStatus& status : summary) {
+      for (PerfStatus& status : summary) {
+        uint64_t avg_queue_ns = status.server_stats.queue_time_ns /
+                                status.server_stats.success_count;
+        uint64_t avg_compute_input_ns =
+            status.server_stats.compute_input_time_ns /
+            status.server_stats.success_count;
+        uint64_t avg_compute_infer_ns =
+            status.server_stats.compute_infer_time_ns /
+            status.server_stats.success_count;
+        uint64_t avg_compute_output_ns =
+            status.server_stats.compute_output_time_ns /
+            status.server_stats.success_count;
+
+        uint64_t avg_compute_ns =
+            avg_compute_input_ns + avg_compute_infer_ns + avg_compute_output_ns;
+
+        uint64_t avg_client_wait_ns = status.client_stats.avg_latency_ns -
+                                      status.client_stats.avg_send_time_ns -
+                                      status.client_stats.avg_receive_time_ns;
+        // Network misc is calculated by subtracting data from different
+        // measurements (server v.s. client), so the result needs to be capped
+        // at 0
+        uint64_t avg_network_misc_ns =
+            avg_client_wait_ns > (avg_queue_ns + avg_compute_ns)
+                ? avg_client_wait_ns - (avg_queue_ns + avg_compute_ns)
+                : 0;
         if (target_concurrency) {
           ofs << status.concurrency << ",";
         } else {
@@ -1408,41 +1351,12 @@ main(int argc, char** argv)
         }
 
         ofs << status.client_stats.infer_per_sec << ","
-            << (status.client_stats.avg_send_time_ns / 1000) << ",";
-        if (profiler->IncludeServerStats()) {
-          uint64_t avg_queue_ns = status.server_stats.queue_time_ns /
-                                  status.server_stats.success_count;
-          uint64_t avg_compute_input_ns =
-              status.server_stats.compute_input_time_ns /
-              status.server_stats.success_count;
-          uint64_t avg_compute_infer_ns =
-              status.server_stats.compute_infer_time_ns /
-              status.server_stats.success_count;
-          uint64_t avg_compute_output_ns =
-              status.server_stats.compute_output_time_ns /
-              status.server_stats.success_count;
-
-          uint64_t avg_compute_ns = avg_compute_input_ns +
-                                    avg_compute_infer_ns +
-                                    avg_compute_output_ns;
-
-          uint64_t avg_client_wait_ns = status.client_stats.avg_latency_ns -
-                                        status.client_stats.avg_send_time_ns -
-                                        status.client_stats.avg_receive_time_ns;
-          // Network misc is calculated by subtracting data from different
-          // measurements (server v.s. client), so the result needs to be capped
-          // at 0
-          uint64_t avg_network_misc_ns =
-              avg_client_wait_ns > (avg_queue_ns + avg_compute_ns)
-                  ? avg_client_wait_ns - (avg_queue_ns + avg_compute_ns)
-                  : 0;
-
-          ofs << (avg_network_misc_ns / 1000) << "," << (avg_queue_ns / 1000)
-              << "," << (avg_compute_input_ns / 1000) << ","
-              << (avg_compute_infer_ns / 1000) << ","
-              << (avg_compute_output_ns / 1000) << ",";
-        }
-        ofs << (status.client_stats.avg_receive_time_ns / 1000);
+            << (status.client_stats.avg_send_time_ns / 1000) << ","
+            << (avg_network_misc_ns / 1000) << "," << (avg_queue_ns / 1000)
+            << "," << (avg_compute_input_ns / 1000) << ","
+            << (avg_compute_infer_ns / 1000) << ","
+            << (avg_compute_output_ns / 1000) << ","
+            << (status.client_stats.avg_receive_time_ns / 1000);
         for (const auto& percentile :
              status.client_stats.percentile_latency_ns) {
           ofs << "," << (percentile.second / 1000);
@@ -1451,66 +1365,61 @@ main(int argc, char** argv)
       }
       ofs.close();
 
-      if (profiler->IncludeServerStats()) {
-        // Record composing model stat in a separate file.
-        if (!summary.front().server_stats.composing_models_stat.empty()) {
-          // For each of the composing model, generate CSV file in the same
-          // format as the one for ensemble.
-          for (const auto& model_identifier :
-               summary[0].server_stats.composing_models_stat) {
-            const auto& name = model_identifier.first.first;
-            const auto& version = model_identifier.first.second;
-            const auto name_ver = name + "_v" + version;
+      // Record composing model stat in a separate file
+      if (!summary.front().server_stats.composing_models_stat.empty()) {
+        // For each of the composing model, generate CSV file in the same format
+        // as the one for ensemble.
+        for (const auto& model_identifier :
+             summary[0].server_stats.composing_models_stat) {
+          const auto& name = model_identifier.first.first;
+          const auto& version = model_identifier.first.second;
+          const auto name_ver = name + "_v" + version;
 
-            std::ofstream ofs(name_ver + "." + filename, std::ofstream::out);
+          std::ofstream ofs(name_ver + "." + filename, std::ofstream::out);
+          if (target_concurrency) {
+            ofs << "Concurrency,";
+          } else {
+            ofs << "Request Rate,";
+          }
+          ofs << "Inferences/Second,Client Send,"
+              << "Network+Server Send/Recv,Server Queue,"
+              << "Server Compute Input,Server Compute Infer,"
+              << "Server Compute Output,Client Recv";
+
+          for (PerfStatus& status : summary) {
+            auto it = status.server_stats.composing_models_stat.find(
+                model_identifier.first);
+            const auto& stats = it->second;
+            uint64_t avg_queue_ns = stats.queue_time_ns / stats.success_count;
+            uint64_t avg_compute_input_ns =
+                stats.compute_input_time_ns / stats.success_count;
+            uint64_t avg_compute_infer_ns =
+                stats.compute_infer_time_ns / stats.success_count;
+            uint64_t avg_compute_output_ns =
+                stats.compute_output_time_ns / stats.success_count;
+            uint64_t avg_compute_ns = avg_compute_input_ns +
+                                      avg_compute_infer_ns +
+                                      avg_compute_output_ns;
+            uint64_t avg_overhead_ns = stats.cumm_time_ns / stats.success_count;
+            avg_overhead_ns =
+                (avg_overhead_ns > (avg_queue_ns + avg_compute_ns))
+                    ? (avg_overhead_ns - avg_queue_ns - avg_compute_ns)
+                    : 0;
+            // infer / sec of the composing model is calculated using the
+            // request count ratio between the composing model and the ensemble
+            double infer_ratio =
+                1.0 * stats.success_count / status.server_stats.success_count;
+            double infer_per_sec =
+                infer_ratio * status.client_stats.infer_per_sec;
             if (target_concurrency) {
-              ofs << "Concurrency,";
+              ofs << status.concurrency << ",";
             } else {
-              ofs << "Request Rate,";
+              ofs << status.request_rate << ",";
             }
-            ofs << "Inferences/Second,Client Send,"
-                << "Network+Server Send/Recv,Server Queue,"
-                << "Server Compute Input,Server Compute Infer,"
-                << "Server Compute Output,Client Recv";
-
-            for (pa::PerfStatus& status : summary) {
-              auto it = status.server_stats.composing_models_stat.find(
-                  model_identifier.first);
-              const auto& stats = it->second;
-              uint64_t avg_queue_ns = stats.queue_time_ns / stats.success_count;
-              uint64_t avg_compute_input_ns =
-                  stats.compute_input_time_ns / stats.success_count;
-              uint64_t avg_compute_infer_ns =
-                  stats.compute_infer_time_ns / stats.success_count;
-              uint64_t avg_compute_output_ns =
-                  stats.compute_output_time_ns / stats.success_count;
-              uint64_t avg_compute_ns = avg_compute_input_ns +
-                                        avg_compute_infer_ns +
-                                        avg_compute_output_ns;
-              uint64_t avg_overhead_ns =
-                  stats.cumm_time_ns / stats.success_count;
-              avg_overhead_ns =
-                  (avg_overhead_ns > (avg_queue_ns + avg_compute_ns))
-                      ? (avg_overhead_ns - avg_queue_ns - avg_compute_ns)
-                      : 0;
-              // infer / sec of the composing model is calculated using the
-              // request count ratio between the composing model and the
-              // ensemble
-              double infer_ratio =
-                  1.0 * stats.success_count / status.server_stats.success_count;
-              double infer_per_sec =
-                  infer_ratio * status.client_stats.infer_per_sec;
-              if (target_concurrency) {
-                ofs << status.concurrency << ",";
-              } else {
-                ofs << status.request_rate << ",";
-              }
-              ofs << infer_per_sec << ",0," << (avg_overhead_ns / 1000) << ","
-                  << (avg_queue_ns / 1000) << ","
-                  << (avg_compute_input_ns / 1000) << ","
-                  << (avg_compute_infer_ns / 1000) << ","
-                  << (avg_compute_output_ns / 1000) << ",0" << std::endl;
-            }
+            ofs << infer_per_sec << ",0," << (avg_overhead_ns / 1000) << ","
+                << (avg_queue_ns / 1000) << "," << (avg_compute_input_ns / 1000)
+                << "," << (avg_compute_infer_ns / 1000) << ","
+                << (avg_compute_output_ns / 1000) << ",0" << std::endl;
           }
         }
       }
