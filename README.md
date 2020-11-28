@@ -100,7 +100,7 @@ $ make install
 ```
     Add the share lib to -DTRITON_EXTRA_LIB_PATHS, only tensorrt was referenced in the demo.
 
-Add to environment variables for `Arm64`
+Add to environment variables for Arm64
 
 ```
 $ vim ~/.bashrc
