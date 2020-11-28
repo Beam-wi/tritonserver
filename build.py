@@ -280,8 +280,8 @@ def backend_cmake_args(images, components, be, install_dir):
 
     cargs.append('-DTRITON_ENABLE_GPU:BOOL={}'.format(
         cmake_enable(FLAGS.enable_gpu)))
-
-    cargs.append('..')
+    # cargs.append('/workspace/build')
+    cargs.append(f'{os.path.dirname(__file__)}/build')
     return cargs
 
 
