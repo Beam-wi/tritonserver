@@ -253,25 +253,72 @@ $ python3 ./build.py --build-dir /opt/tritonserver --install-dir /opt/tritonserv
 --endpoint=http --endpoint=grpc --backend=custom --backend=ensemble --backend=tensorrt
 ```
 
-* r20.10 use container with --container-version + version, but higher without container --no-container-build.
-* Arm64 architecture non-supported gcs and s3, without --filesystem=gcs --filesystem=s3.
-* Other backend with --backend=backend_name, which share lib add to PATH.
+* r20.10 use container with `--container-version=version`, but higher without container `--no-container-build`.
+* Arm64 architecture non-supported gcs and s3, without `--filesystem=gcs` `--filesystem=s3`.
+* Other backend with `--backend=backend_name`, which share lib add to PATH.
 
 
 Terminal installed
 
 ```
-    $ mkdir ./builddir
-    $ cd builddir
-    
-    $ cmake -DTRITON_ENABLE_TENSORRT=ON -DTRITON_ENABLE_GPU=ON -DTRITON_ENABLE_METRICS_GPU=ON -DTRITON_ENABLE_TRACING=ON -DTRITON_ENABLE_ENSEMBLE=ON -DTRITON_ENABLE_GCS=ON \
-    -DTRITON_ENABLE_S3=ON -DTRITON_EXTRA_LIB_PATHS="/usr/local/bin;/usr/local/include;/usr/local/lib;/usr/local/cuda;/usr/local/lib/python3.6/dist-packages" \
-    -DTRITON_ENABLE_GRPC=ON -DTRITON_ENABLE_HTTP=ON ../build
-    
-    $ make -j24 server
-    $ make install
+$ mkdir ./builddir
+$ cd builddir
+
+$ cmake -DTRITON_ENABLE_TENSORRT=ON -DTRITON_ENABLE_GPU=ON -DTRITON_ENABLE_METRICS_GPU=ON -DTRITON_ENABLE_TRACING=ON \
+-DTRITON_ENABLE_ENSEMBLE=ON -DTRITON_ENABLE_GCS=ON -DTRITON_ENABLE_S3=ON \
+-DTRITON_EXTRA_LIB_PATHS="/usr/local/bin;/usr/local/include;/usr/local/lib;/usr/local/cuda;/usr/local/lib/python3.6/dist-packages" \
+-DTRITON_ENABLE_GRPC=ON -DTRITON_ENABLE_HTTP=ON ../build
+
+$ make -j24 server
+$ make install
 ```
     Add the share lib to -DTRITON_EXTRA_LIB_PATHS, only tensorrt was referenced in the demo.
+
+Add to environment variables for Arm64
+
+```
+$ vim ~/.bashrc
+adit:
+    # tritonserver
+    export LD_PRELOAD=/usr/local/cuda/targets/aarch64-linux/lib/stubs/libnvidia-ml.so
+    export LD_LIBRARY_PATH=$LD_LIBRARY_PATH:/opt/tritonserver/tritonserver/install/lib
+$ source ~/.bashrc
+```
+
+To run the clients the following dependencies must be installed.
+
+    apt-get install -y --no-install-recommends \
+            curl \
+            libopencv-dev=3.2.0+dfsg-4ubuntu0.1 \
+            libopencv-core-dev=3.2.0+dfsg-4ubuntu0.1 \
+            pkg-config \
+            python3 \
+            python3-pip \
+            python3-dev
+
+    python3 -m pip install --upgrade wheel setuptools
+    python3 -m pip install --upgrade grpcio-tools numpy pillow
+    
+The Python wheel for the python client library is present in the tar file and can be installed by running the following command:
+
+    python3 -m pip install --upgrade clients/python/tritonclient-2.4.0-py3-none-linux_aarch64.whl[all]
+
+On jetson, the backend directory needs to be explicitly set with the `--backend-directory` flag. Triton also defaults to using TensorFlow 1.x 
+and a version string is required to specify TensorFlow 2.x.
+
+      tritonserver --model-repository=/path/to/model_repo --backend-directory=/path/to/tritonserver/backends \
+             --backend-config=tensorflow,version=2		
+		
+### Model Repository
+    
+    $ cd Path~/tritonserver/qa/common
+    $ python3 ./gen_qa_models.py --models_dir /Path~/model_repository/tensorrt --tensorrt
+    
+ Other model repository substitute `--tensorrt`
+ 
+### Run Triton
+    $ cd /opt/tritonserver/tritonserver/install/bin
+    $ ./tritonserver --model-repository=/Path~/model_repository/tensorrt
 
 ### Developer Documentation
 
