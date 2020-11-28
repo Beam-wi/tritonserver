@@ -255,7 +255,7 @@ $ python3 ./build.py --build-dir /opt/tritonserver --install-dir /opt/tritonserv
 
 * r20.10 use container with `--container-version=version`, but higher without container `--no-container-build`.
 * Arm64 architecture non-supported gcs and s3, without `--filesystem=gcs` `--filesystem=s3`.
-* Other backend with `--backend=backend_name`, which share lib add to PATH.
+* Other backend with `--backend=backend_name`, which share lib add to environment variables.
 
 
 Or terminal installed
