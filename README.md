@@ -199,7 +199,7 @@ version 2 of Triton from previously using version 1.
 ### Jetson Jetpack Support
 
 A release of Triton for the Developer Preview of JetPack 4.4 (https://developer.nvidia.com/embedded/jetpack) is provided in the attached 
-file: `v2.5.0-jetpack4.4-1795341.tgz`. This release supports the `TensorFlow 2.3.1`, `TensorFlow 1.15.3`, `TensorRT 7.1`, and Custom backends as 
+file: `v2.5.0-jetpack4.4-1795341.tgz`. This release supports the `TensorFlow 2.3.1`, `TensorFlow 1.15.4`, `TensorRT 7.1`, and Custom backends as 
 well as ensembles. GPU metrics, GCS storage and S3 storage are not supported.
 
 The tar file contains the Triton server executable and shared libraries and also the C++ and Python client libraries and examples.
@@ -298,7 +298,7 @@ To run the clients the following dependencies must be installed.
     
 The Python wheel for the python client library is present in the tar file and can be installed by running the following command:
 
-    python3 -m pip install --upgrade clients/python/tritonclient-2.4.0-py3-none-linux_aarch64.whl[all]
+    python3 -m pip install --upgrade clients/python/tritonclient-2.5.0-py3-none-linux_aarch64.whl[all]
 
 On jetson, the backend directory needs to be explicitly set with the `--backend-directory` flag. Triton also defaults to using `TensorFlow 1.x` 
 and a version string is required to specify `TensorFlow 2.x`.
