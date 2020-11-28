@@ -802,7 +802,7 @@ TRITONSERVER_InferenceTraceModelName(
 #endif  // TRITON_ENABLE_TRACING
 }
 
-TRITONSERVER_Error*
+TRITONSERVER_EXPORT TRITONSERVER_Error*
 TRITONSERVER_InferenceTraceModelVersion(
     TRITONSERVER_InferenceTrace* trace, int64_t* model_version)
 {
