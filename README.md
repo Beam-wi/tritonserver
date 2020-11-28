@@ -198,6 +198,43 @@ The [version 1 to version 2 migration
 information](docs/v1_to_v2.md) is helpful if you are moving to
 version 2 of Triton from previously using version 1.
 
+### Jetson Jetpack Support
+
+A release of Triton for the Developer Preview of JetPack 4.4 (https://developer.nvidia.com/embedded/jetpack) is provided in the attached 
+file: v2.4.0-jetpack4.4-1718105.tgz. This release supports the TensorFlow 2.3.1, TensorFlow 1.15.3, TensorRT 7.1, and Custom backends as 
+well as ensembles. GPU metrics, GCS storage and S3 storage are not supported.
+
+The tar file contains the Triton server executable and shared libraries and also the C++ and Python client libraries and examples.
+
+### Installation and Usage
+
+The following dependencies must be installed before running Triton.
+
+```
+apt-get update && \
+    apt-get install -y --no-install-recommends \
+        software-properties-common \
+        autoconf \
+        automake \
+        build-essential \
+        git \
+        libb64-dev \
+        libre2-dev \
+        libssl-dev \
+        libtool \
+        libboost-dev \
+        libcurl4-openssl-dev \
+        rapidjson-dev \
+        patchelf \
+        zlib1g-dev
+```
+
+Other Dependencies
+
+* [cmake >= 3.0.0](docs/cmake.md)
+
+* There is no need [TensorRT](docs/tensorrt.md) for JetPack4.x but Ubuntu 18.04.
+
 ### Developer Documentation
 
 Triton can be [built using
