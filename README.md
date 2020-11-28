@@ -303,8 +303,8 @@ The Python wheel for the python client library is present in the tar file and ca
 
     python3 -m pip install --upgrade clients/python/tritonclient-2.4.0-py3-none-linux_aarch64.whl[all]
 
-On jetson, the backend directory needs to be explicitly set with the `--backend-directory` flag. Triton also defaults to using TensorFlow 1.x 
-and a version string is required to specify TensorFlow 2.x.
+On jetson, the backend directory needs to be explicitly set with the `--backend-directory` flag. Triton also defaults to using `TensorFlow 1.x` 
+and a version string is required to specify `TensorFlow 2.x`.
 
       tritonserver --model-repository=/path/to/model_repo --backend-directory=/path/to/tritonserver/backends \
              --backend-config=tensorflow,version=2		
