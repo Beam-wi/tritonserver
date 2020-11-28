@@ -193,6 +193,15 @@ The [version 1 to version 2 migration
 information](docs/v1_to_v2.md) is helpful if you are moving to
 version 2 of Triton from previously using version 1.
 
+### Jetson Jetpack Support
+
+A release of Triton for the Developer Preview of JetPack 4.4 (https://developer.nvidia.com/embedded/jetpack) is provided in the attached 
+file: `v2.5.0-jetpack4.4-1785341.tgz`. This release supports the `TensorFlow 2.3.1`, `TensorFlow 1.15.4`, `TensorRT 7.1`, and Custom backends as 
+well as ensembles. `GPU` metrics, `GCS` storage and `S3` storage are not supported.
+
+The tar file contains the Triton server executable and shared libraries and also the C++ and Python client libraries and examples.
+
+
 ### Installation and Usage
 
 The following dependencies must be installed before running Triton.
@@ -220,7 +229,7 @@ Other Dependencies
 
 * [cmake >= 3.0.0](docs/cmake.md)
 
-* There is no need [TensorRT](docs/tensorrt.md) for JetPack4.x but Ubuntu 18.04.
+* There is no need [TensorRT](docs/tensorrt.md) for `JetPack4.x` but `Ubuntu 18.04`.
 
 ### Build With Cmake
 
@@ -229,7 +238,7 @@ Pull installation documentation.
 ```
 $ git clone  https://github.com/Beam-wi/tritonserver.git
 $ cd tritonserver
-$ git checkout r20.10
+$ git checkout r20.11
 ```
 
 build.py installed 
@@ -240,9 +249,9 @@ $ python3 ./build.py --build-dir /opt/tritonserver --install-dir /opt/tritonserv
 --endpoint=http --endpoint=grpc --backend=custom --backend=ensemble --backend=tensorrt
 ```
 
-* r20.10 use container with `--container-version=version`, but higher without container `--no-container-build`.
-* Arm64 architecture non-supported gcs and s3, without `--filesystem=gcs` `--filesystem=s3`.
-* Other backend with `--backend=backend_name`, which share lib add to environment variables.
+* Note: `r20.11` use container with `--container-version=version`, without container must `--no-container-build`.
+* Note: `Arm64` architecture non-supported `gcs` and `s3`, without `--filesystem=gcs` `--filesystem=s3`.
+* Note: Other backend with `--backend=backend_name`, which share lib add to environment variables.
 
 
 Or terminal installed
@@ -261,7 +270,7 @@ $ make install
 ```
     Add the share lib to -DTRITON_EXTRA_LIB_PATHS, only tensorrt was referenced in the demo.
 
-Add to environment variables for Arm64
+Add to environment variables for `Arm64`
 
 ```
 $ vim ~/.bashrc
@@ -288,7 +297,7 @@ To run the clients the following dependencies must be installed.
     
 The Python wheel for the python client library is present in the tar file and can be installed by running the following command:
 
-    python3 -m pip install --upgrade clients/python/tritonclient-2.4.0-py3-none-linux_aarch64.whl[all]
+    python3 -m pip install --upgrade clients/python/tritonclient-2.5.0-py3-none-linux_aarch64.whl[all]
 
 On jetson, the backend directory needs to be explicitly set with the `--backend-directory` flag. Triton also defaults to using `TensorFlow 1.x` 
 and a version string is required to specify `TensorFlow 2.x`.
