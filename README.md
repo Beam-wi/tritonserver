@@ -245,7 +245,7 @@ $ cd tritonserver
 $ git checkout r20.10
 ```
 
-Installed with build.py
+build.py installed 
 
 ```
 $ python3 ./build.py --build-dir /opt/tritonserver --install-dir /opt/tritonserver/install --enable-logging \
@@ -258,7 +258,7 @@ $ python3 ./build.py --build-dir /opt/tritonserver --install-dir /opt/tritonserv
 * Other backend with `--backend=backend_name`, which share lib add to PATH.
 
 
-Terminal installed
+Or terminal installed
 
 ```
 $ mkdir ./builddir
