@@ -235,6 +235,44 @@ Other Dependencies
 
 * There is no need [TensorRT](docs/tensorrt.md) for JetPack4.x but Ubuntu 18.04.
 
+### Build With Cmake
+
+Pull installation documentation.
+
+```
+$ git clone  https://github.com/Beam-wi/tritonserver.git
+$ cd tritonserver
+$ git checkout r20.10
+```
+
+Installed with build.py
+
+```
+$ python3 ./build.py --build-dir /opt/tritonserver --install-dir /opt/tritonserver/install --enable-logging \
+--enable-stats --enable-tracing --enable-metrics --enable-gpu-metrics --enable-gpu --filesystem=gcs --filesystem=s3 \
+--endpoint=http --endpoint=grpc --backend=custom --backend=ensemble --backend=tensorrt
+```
+
+* r20.10 use container with --container-version + version, but higher without container --no-container-build.
+* Arm64 architecture non-supported gcs and s3, without --filesystem=gcs --filesystem=s3.
+* Other backend with --backend=backend_name, which share lib add to PATH.
+
+
+Terminal installed
+
+```
+    $ mkdir ./builddir
+    $ cd builddir
+    
+    $ cmake -DTRITON_ENABLE_TENSORRT=ON -DTRITON_ENABLE_GPU=ON -DTRITON_ENABLE_METRICS_GPU=ON -DTRITON_ENABLE_TRACING=ON -DTRITON_ENABLE_ENSEMBLE=ON -DTRITON_ENABLE_GCS=ON \
+    -DTRITON_ENABLE_S3=ON -DTRITON_EXTRA_LIB_PATHS="/usr/local/bin;/usr/local/include;/usr/local/lib;/usr/local/cuda;/usr/local/lib/python3.6/dist-packages" \
+    -DTRITON_ENABLE_GRPC=ON -DTRITON_ENABLE_HTTP=ON ../build
+    
+    $ make -j24 server
+    $ make install
+```
+    Add the share lib to -DTRITON_EXTRA_LIB_PATHS, only tensorrt was referenced in the demo.
+
 ### Developer Documentation
 
 Triton can be [built using
