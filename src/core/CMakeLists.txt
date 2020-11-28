@@ -114,7 +114,9 @@ endif() # TRITON_ENABLE_GPU
 if(${TRITON_ENABLE_GCS})
   find_package(storage_client REQUIRED)
   message(STATUS "Using google-cloud-cpp ${storage_client_VERSION}")
+if (NOT WIN32)
   set_source_files_properties(filesystem.cc PROPERTIES COMPILE_FLAGS -Wno-missing-field-initializers)
+endif() # NOT WIN32
 endif() # TRITON_ENABLE_GCS
 
 if(${TRITON_ENABLE_S3})
@@ -142,6 +144,7 @@ set(
   metrics.cc
   model_config_utils.cc
   model_repository_manager.cc
+  persistent_backend_manager.cc
   pinned_memory_manager.cc
   scheduler_utils.cc
   sequence_batch_scheduler.cc
@@ -174,6 +177,7 @@ set(
   model_config_utils.h
   model_repository_manager.h
   nvtx.h
+  persistent_backend_manager.h
   pinned_memory_manager.h
   response_allocator.h
   sync_queue.h
@@ -234,6 +238,13 @@ if(${TRITON_ENABLE_S3})
     PRIVATE $<TARGET_PROPERTY:aws-cpp-sdk-s3,INTERFACE_INCLUDE_DIRECTORIES>
   )
 endif() # TRITON_ENABLE_S3
+
+if(${TRITON_ENABLE_AZURE_STORAGE})
+  target_include_directories(
+    server-library
+    PRIVATE ${azure-storage-cpplite_DIR}/include
+  )
+endif() # TRITON_ENABLE_AZURE_STORAGE
 
 target_link_libraries(
   server-library

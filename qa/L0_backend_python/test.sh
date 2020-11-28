@@ -27,7 +27,7 @@
 
 CLIENT_PY=./python_test.py
 CLIENT_LOG="./client.log"
-EXPECTED_NUM_TESTS="5"
+EXPECTED_NUM_TESTS="6"
 
 SERVER=/opt/tritonserver/bin/tritonserver
 SERVER_ARGS="--model-repository=`pwd`/models --log-verbose=1"
@@ -74,6 +74,22 @@ cp ../python_models/execute_error/config.pbtxt ./models/execute_error/
 mkdir -p models/init_args/1/
 cp ../python_models/init_args/model.py ./models/init_args/1/
 cp ../python_models/init_args/config.pbtxt ./models/init_args/
+
+# Ensemble Model
+mkdir -p models/ensemble/1/
+cp ../python_models/ensemble/config.pbtxt ./models/ensemble
+
+mkdir -p models/add_sub_1/1/
+cp ../python_models/add_sub/config.pbtxt ./models/add_sub_1
+(cd models/add_sub_1 && \
+          sed -i "s/^name:.*/name: \"add_sub_1\"/" config.pbtxt)
+cp ../python_models/add_sub/model.py ./models/add_sub_1/1/
+
+mkdir -p models/add_sub_2/1/
+cp ../python_models/add_sub/config.pbtxt ./models/add_sub_2/
+(cd models/add_sub_2 && \
+          sed -i "s/^name:.*/name: \"add_sub_2\"/" config.pbtxt)
+cp ../python_models/add_sub/model.py ./models/add_sub_2/1/
 
 pip3 install torch==1.6.0+cpu torchvision==0.7.0+cpu -f https://download.pytorch.org/whl/torch_stable.html
 
@@ -202,6 +218,30 @@ fi
 kill $SERVER_PID
 wait $SERVER_PID
 
+# Test Multi file models
+rm -rf models/
+mkdir -p models/multi_file/1/
+cp ../python_models/multi_file/*.py ./models/multi_file/1/
+cp ../python_models/identity_fp32/config.pbtxt ./models/multi_file/
+(cd models/multi_file && \
+          sed -i "s/^name:.*/name: \"multi_file\"/" config.pbtxt)
+
+run_server
+if [ "$SERVER_PID" == "0" ]; then
+    echo -e "\n***\n*** Failed to start $SERVER\n***"
+    cat $SERVER_LOG
+    exit 1
+fi
+
+if [ $? -ne 0 ]; then
+    cat $CLIENT_LOG
+    echo -e "\n***\n*** multi-file model test failed \n***"
+    RET=1
+fi
+
+kill $SERVER_PID
+wait $SERVER_PID
+
 # Test environment variable propagation
 rm -rf models/
 mkdir -p models/model_env/1/
@@ -228,3 +268,4 @@ else
 fi
 
 exit $RET
+

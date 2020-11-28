@@ -26,141 +26,48 @@
 
 #include "src/clients/c++/perf_analyzer/model_parser.h"
 
-nic::Error
-ModelParser::Init(
-    const inference::ModelMetadataResponse& metadata,
-    const inference::ModelConfig& config, const std::string& model_version,
-    const std::unordered_map<std::string, std::vector<int64_t>>& input_shapes,
-    std::unique_ptr<TritonClientWrapper>& client_wrapper)
+#include "rapidjson/writer.h"
+
+namespace perfanalyzer {
+
+namespace {
+// In the json produced by protobuf, int64 and uint64 values are
+// represented as strings. Protobuf doesn't provide an option to
+// disable this (sigh) so we need to correctly parse these fields
+// for ModelParser to receive appopriate requests.
+cb::Error
+GetInt(const rapidjson::Value& value, int64_t* integer_value)
 {
-  model_name_ = metadata.name();
-  model_version_ = model_version;
-  // Get the scheduler type for the model
-  if (config.has_ensemble_scheduling()) {
-    bool is_sequential = false;
-    RETURN_IF_ERROR(GetEnsembleSchedulerType(
-        config, model_version, client_wrapper, &is_sequential));
-    if (is_sequential) {
-      scheduler_type_ = ENSEMBLE_SEQUENCE;
-    } else {
-      scheduler_type_ = ENSEMBLE;
+  if (value.IsString()) {
+    std::string str(value.GetString(), value.GetStringLength());
+
+    try {
+      *integer_value = std::atoll(str.c_str());
     }
-  } else if (config.has_sequence_batching()) {
-    scheduler_type_ = SEQUENCE;
-  } else if (config.has_dynamic_batching()) {
-    scheduler_type_ = DYNAMIC;
+    catch (...) {
+      return cb::Error(
+          std::string("unable to convert '") + str + "' to integer");
+    }
+
+  } else if (value.IsInt64()) {
+    *integer_value = value.GetInt64();
+  } else if (value.IsInt()) {
+    *integer_value = value.GetInt();
   } else {
-    scheduler_type_ = NONE;
+    return cb::Error("failed to parse the integer value");
   }
 
-  max_batch_size_ = config.max_batch_size();
-
-  is_decoupled_ = config.model_transaction_policy().decoupled();
-
-  // Get the information about inputs from metadata
-  for (const auto& input : metadata.inputs()) {
-    auto it = inputs_->emplace(input.name(), ModelTensor()).first;
-    it->second.name_ = input.name();
-    it->second.datatype_ = input.datatype();
-    bool is_dynamic = false;
-    // Skip the batch size in the shape
-    bool skip = (max_batch_size_ > 0);
-    for (const auto dim : input.shape()) {
-      if (skip) {
-        skip = false;
-        continue;
-      }
-      if (dim == -1) {
-        is_dynamic = true;
-      }
-      it->second.shape_.push_back(dim);
-    }
-
-    if (is_dynamic) {
-      const auto user_shape_it = input_shapes.find(input.name());
-      if (user_shape_it != input_shapes.end()) {
-        // Update the default shape to be used.
-        it->second.shape_.clear();
-        for (const auto dim : user_shape_it->second) {
-          it->second.shape_.push_back(dim);
-        }
-      }
-    }
-  }
-
-  // Check whether the tensor is shape tensor or not from config.
-  for (const auto& input_config : config.input()) {
-    const auto& itr = inputs_->find(input_config.name());
-    if (itr == inputs_->end()) {
-      return nic::Error(
-          "no metadata found for input tensor " + input_config.name());
-    }
-    itr->second.is_shape_tensor_ = input_config.is_shape_tensor();
-  }
-
-  // Get the information about outputs from metadata
-  for (const auto& output : metadata.outputs()) {
-    auto it = outputs_->emplace(output.name(), ModelTensor()).first;
-    it->second.name_ = output.name();
-    it->second.datatype_ = output.datatype();
-    // Skip the batch size in the shape
-    bool skip = (max_batch_size_ > 0);
-    for (const auto dim : output.shape()) {
-      if (skip) {
-        skip = false;
-        continue;
-      }
-      it->second.shape_.push_back(dim);
-    }
-  }
-
-  // Check whether the tensor is shape tensor or not from config.
-  for (const auto& output_config : config.output()) {
-    const auto& itr = outputs_->find(output_config.name());
-    if (itr == outputs_->end()) {
-      return nic::Error(
-          "no metadata found for output tensor " + output_config.name());
-    }
-    itr->second.is_shape_tensor_ = output_config.is_shape_tensor();
-  }
-  return nic::Error::Success;
+  return cb::Error::Success;
 }
 
+}  // namespace
 
-nic::Error
-ModelParser::GetEnsembleSchedulerType(
-    const inference::ModelConfig& config, const std::string& model_version,
-    std::unique_ptr<TritonClientWrapper>& client_wrapper, bool* is_sequential)
-{
-  if (config.has_sequence_batching()) {
-    *is_sequential = true;
-  }
-
-  if (config.platform() == "ensemble") {
-    for (const auto& step : config.ensemble_scheduling().step()) {
-      inference::ModelConfigResponse model_config;
-      std::string step_version;
-      if (step.model_version() != -1) {
-        step_version = std::to_string(step.model_version());
-      }
-      (*composing_models_map_)[config.name()].emplace(
-          step.model_name(), step_version);
-      RETURN_IF_ERROR(client_wrapper->ModelConfig(
-          &model_config, step.model_name(), step_version));
-      RETURN_IF_ERROR(GetEnsembleSchedulerType(
-          model_config.config(), step_version, client_wrapper, is_sequential));
-    }
-  }
-
-  return nic::Error::Success;
-}
-
-nic::Error
-ModelParser::Init(
+cb::Error
+ModelParser::InitTriton(
     const rapidjson::Document& metadata, const rapidjson::Document& config,
     const std::string& model_version,
     const std::unordered_map<std::string, std::vector<int64_t>>& input_shapes,
-    std::unique_ptr<TritonClientWrapper>& client_wrapper)
+    std::unique_ptr<cb::ClientBackend>& backend)
 {
   model_name_ = metadata["name"].GetString();
   model_version_ = model_version;
@@ -170,7 +77,7 @@ ModelParser::Init(
   if (ensemble_itr != config.MemberEnd()) {
     bool is_sequential = false;
     RETURN_IF_ERROR(GetEnsembleSchedulerType(
-        config, model_version, client_wrapper, &is_sequential));
+        config, model_version, backend, &is_sequential));
     if (is_sequential) {
       scheduler_type_ = ENSEMBLE_SEQUENCE;
     } else {
@@ -191,7 +98,9 @@ ModelParser::Init(
   max_batch_size_ = 0;
   const auto bs_itr = config.FindMember("max_batch_size");
   if (bs_itr != config.MemberEnd()) {
-    max_batch_size_ = bs_itr->value.GetInt();
+    int64_t mbs;
+    RETURN_IF_ERROR(GetInt(bs_itr->value, &mbs));
+    max_batch_size_ = mbs;
   }
 
   const auto txn_itr = config.FindMember("model_transaction_policy");
@@ -214,10 +123,12 @@ ModelParser::Init(
           skip = false;
           continue;
         }
-        if (dim.GetInt() == -1) {
+        int64_t dim_int;
+        RETURN_IF_ERROR(GetInt(dim, &dim_int));
+        if (dim_int == -1) {
           is_dynamic = true;
         }
-        it->second.shape_.push_back(dim.GetInt());
+        it->second.shape_.push_back(dim_int);
       }
 
       if (is_dynamic) {
@@ -242,7 +153,7 @@ ModelParser::Init(
           input_config["name"].GetStringLength());
       auto it = inputs_->find(name);
       if (it == inputs_->end()) {
-        return nic::Error("no metadata found for input tensor " + name);
+        return cb::Error("no metadata found for input tensor " + name);
       }
       const auto& shape_tensor_itr = input_config.FindMember("is_shape_tensor");
       if (shape_tensor_itr != input_config.MemberEnd()) {
@@ -265,7 +176,9 @@ ModelParser::Init(
           skip = false;
           continue;
         }
-        it->second.shape_.push_back(dim.GetInt());
+        int64_t dim_int;
+        RETURN_IF_ERROR(GetInt(dim, &dim_int));
+        it->second.shape_.push_back(dim_int);
       }
     }
   }
@@ -279,7 +192,7 @@ ModelParser::Init(
           output_config["name"].GetStringLength());
       auto itr = outputs_->find(name);
       if (itr == outputs_->end()) {
-        return nic::Error("no metadata found for output tensor " + name);
+        return cb::Error("no metadata found for output tensor " + name);
       }
       const auto& shape_tensor_itr =
           output_config.FindMember("is_shape_tensor");
@@ -288,14 +201,125 @@ ModelParser::Init(
       }
     }
   }
-  return nic::Error::Success;
+  return cb::Error::Success;
 }
 
+cb::Error
+ModelParser::InitTFServe(
+    const rapidjson::Document& metadata, const std::string& model_name,
+    const std::string& model_version, const std::string& model_signature_name,
+    const int32_t batch_size,
+    const std::unordered_map<std::string, std::vector<int64_t>>& input_shapes,
+    std::unique_ptr<cb::ClientBackend>& backend)
+{
+  model_name_ = model_name;
+  model_version_ = model_version;
+  model_signature_name_ = model_signature_name;
+  // Get the scheduler type for the model
+  scheduler_type_ = NONE;
 
-nic::Error
+  // Will use the user provided batch size as max. Relies on the service
+  // to throw an error if not supported.
+  max_batch_size_ = batch_size;
+
+  const rapidjson::Value& signature_config =
+      metadata["metadata"]["signature_def"]["signature_def"];
+  if (!signature_config.HasMember(model_signature_name.c_str())) {
+    return cb::Error(
+        "Failed to find signature_name \"" + model_signature_name +
+        "\" in the metadata");
+  }
+
+  // Get the information about inputs from metadata
+  if (signature_config[model_signature_name.c_str()].HasMember("inputs")) {
+    const rapidjson::Value& inputs =
+        signature_config[model_signature_name.c_str()]["inputs"];
+    for (rapidjson::Value::ConstMemberIterator json_itr = inputs.MemberBegin();
+         json_itr != inputs.MemberEnd(); ++json_itr) {
+      auto it =
+          inputs_->emplace(json_itr->name.GetString(), ModelTensor()).first;
+      it->second.name_ = json_itr->name.GetString();
+      RETURN_IF_ERROR(ConvertDTypeFromTFS(
+          json_itr->value["dtype"].GetString(), &it->second.datatype_));
+
+      bool is_dynamic = false;
+      if (json_itr->value["tensor_shape"]["unknown_rank"].GetBool()) {
+        if (max_batch_size_ != 0) {
+          return cb::Error(
+              "Can not specify -b flag for saved model with unknown ranked "
+              "inputs");
+        }
+        is_dynamic = true;
+      } else {
+        bool first_dim = true;
+        for (const auto& dim :
+             json_itr->value["tensor_shape"]["dim"].GetArray()) {
+          int64_t dim_int;
+          RETURN_IF_ERROR(GetInt(dim["size"], &dim_int));
+          if (first_dim && (max_batch_size_ != 0)) {
+            if (dim_int != -1) {
+              return cb::Error(
+                  "Can not specify -b flag for saved model with input not "
+                  "having their first dim as -1");
+            }
+            first_dim = false;
+          } else {
+            if (dim_int == -1) {
+              is_dynamic = true;
+            }
+            it->second.shape_.push_back(dim_int);
+          }
+        }
+      }
+
+      if (is_dynamic) {
+        const auto user_shape_it = input_shapes.find(it->second.name_);
+        if (user_shape_it != input_shapes.end()) {
+          // Update the default shape to be used.
+          it->second.shape_.clear();
+          for (const auto dim : user_shape_it->second) {
+            it->second.shape_.push_back(dim);
+          }
+        }
+      }
+    }
+  }
+
+  // Will not extract the information about the information about the outputs.
+  // As by default, the TensorFlow serving will return all the output tensors
+  // if none are requested.
+  // See here
+  // https://github.com/tensorflow/serving/blob/2.3.0/tensorflow_serving/apis/predict.proto#L27
+
+  return cb::Error::Success;
+}
+
+cb::Error
+ModelParser::InitTorchServe(
+    const std::string& model_name, const std::string& model_version,
+    const int32_t batch_size)
+{
+  // TorchServe does not return model metadata hence we can not obtain any
+  // parameters.
+  model_name_ = model_name;
+  model_version_ = model_version;
+  max_batch_size_ = batch_size;
+
+  // TorchServe needs to upload a file to the server. The input will hold the
+  // path to the file which should be provided as json to --input-data
+  auto it = inputs_->emplace("TORCHSERVE_INPUT", ModelTensor()).first;
+  it->second.name_ = "TORCHSERVE_INPUT";
+  it->second.datatype_ = "BYTES";
+  // Supports only a single input file
+  it->second.shape_.push_back(1);
+
+  return cb::Error::Success;
+}
+
+cb::Error
 ModelParser::GetEnsembleSchedulerType(
     const rapidjson::Document& config, const std::string& model_version,
-    std::unique_ptr<TritonClientWrapper>& client_wrapper, bool* is_sequential)
+    std::unique_ptr<cb::ClientBackend>& backend, bool* is_sequential)
 {
   const auto& sequence_itr = config.FindMember("sequence_batching");
   if (sequence_itr != config.MemberEnd()) {
@@ -306,7 +330,8 @@ ModelParser::GetEnsembleSchedulerType(
     const auto step_itr = config["ensemble_scheduling"].FindMember("step");
     for (const auto& step : step_itr->value.GetArray()) {
       std::string step_model_version;
-      const int64_t model_version_int = step["model_version"].GetInt64();
+      int64_t model_version_int;
+      RETURN_IF_ERROR(GetInt(step["model_version"], &model_version_int));
       if (model_version_int == -1) {
         step_model_version = "";
       } else {
@@ -316,12 +341,14 @@ ModelParser::GetEnsembleSchedulerType(
           std::string(step["model_name"].GetString()), step_model_version);
 
       rapidjson::Document model_config;
-      RETURN_IF_ERROR(client_wrapper->ModelConfig(
+      RETURN_IF_ERROR(backend->ModelConfig(
           &model_config, step["model_name"].GetString(), step_model_version));
       RETURN_IF_ERROR(GetEnsembleSchedulerType(
-          model_config, step_model_version, client_wrapper, is_sequential));
+          model_config, step_model_version, backend, is_sequential));
     }
   }
 
-  return nic::Error::Success;
+  return cb::Error::Success;
 }
+
+}  // namespace perfanalyzer

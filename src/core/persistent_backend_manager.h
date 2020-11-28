@@ -1,4 +1,4 @@
-// Copyright (c) 2019, NVIDIA CORPORATION. All rights reserved.
+// Copyright (c) 2020, NVIDIA CORPORATION. All rights reserved.
 //
 // Redistribution and use in source and binary forms, with or without
 // modification, are permitted provided that the following conditions
@@ -25,42 +25,34 @@
 // OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #pragma once
 
+#include <list>
+#include "src/backends/backend/triton_backend_manager.h"
 #include "src/core/constants.h"
 #include "src/core/model_config.h"
 #include "src/core/status.h"
 
 namespace nvidia { namespace inferenceserver {
 
-class InferenceBackend;
-
-class LibTorchBackendFactory {
+//
+// A single manager across all InferenceServer objects that keeps the
+// persistent backends loaded as long as there is at least one
+// InferenceServer object.
+//
+class PersistentBackendManager {
  public:
-  struct Config : public BackendConfig {
-    // Autofill missing required model configuration settings based on
-    // model definition file.
-    bool autofill;
-  };
-
   static Status Create(
-      const std::shared_ptr<BackendConfig>& backend_config,
-      std::unique_ptr<LibTorchBackendFactory>* factory);
-
-  Status CreateBackend(
-      const std::string& path, const inference::ModelConfig& model_config,
-      const double min_compute_capability,
-      std::unique_ptr<InferenceBackend>* backend);
-
-  ~LibTorchBackendFactory() = default;
+      const BackendCmdlineConfigMap& config_map,
+      std::shared_ptr<PersistentBackendManager>* manager);
 
  private:
-  DISALLOW_COPY_AND_ASSIGN(LibTorchBackendFactory);
+  DISALLOW_COPY_AND_ASSIGN(PersistentBackendManager);
+  PersistentBackendManager() = default;
+  Status InitPersistentBackends(const BackendCmdlineConfigMap& config_map);
+  Status InitPersistentBackend(
+      const std::string& backend_name,
+      const BackendCmdlineConfigMap& config_map);
 
-  LibTorchBackendFactory(const std::shared_ptr<Config>& backend_config)
-      : backend_config_(backend_config)
-  {
-  }
-
-  const std::shared_ptr<Config> backend_config_;
+  std::list<std::shared_ptr<TritonBackend>> persist_backends_;
 };
 
 }}  // namespace nvidia::inferenceserver
