@@ -242,6 +242,7 @@ Pull installation documentation.
 ```
 $ git clone  https://github.com/Beam-wi/tritonserver.git
 $ cd tritonserver
+$ export TRITON_SOURCE=`pwd`
 $ git checkout r20.10
 ```
 
