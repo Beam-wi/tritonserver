@@ -27,15 +27,11 @@
 #include "src/clients/c++/perf_analyzer/inference_profiler.h"
 
 #include <math.h>
-#include <algorithm>
 #include <limits>
 #include <queue>
 
-
-namespace perfanalyzer {
-
 namespace {
-cb::Error
+nic::Error
 ReportServerSideStats(const ServerSideStats& stats, const int iteration)
 {
   const std::string ident = std::string(2 * iteration, ' ');
@@ -46,7 +42,7 @@ ReportServerSideStats(const ServerSideStats& stats, const int iteration)
   const uint64_t cnt = stats.success_count;
   if (cnt == 0) {
     std::cout << ident << "  Request count: " << cnt << std::endl;
-    return cb::Error::Success;
+    return nic::Error::Success;
   }
 
   const uint64_t cumm_time_us = stats.cumm_time_ns / 1000;
@@ -105,13 +101,13 @@ ReportServerSideStats(const ServerSideStats& stats, const int iteration)
     }
   }
 
-  return cb::Error::Success;
+  return nic::Error::Success;
 }
 
-cb::Error
+nic::Error
 ReportClientSideStats(
     const ClientSideStats& stats, const int64_t percentile,
-    const cb::ProtocolType protocol, const bool verbose,
+    const ProtocolType protocol, const bool verbose,
     const bool on_sequence_model, const bool include_lib_stats)
 {
   const uint64_t avg_latency_us = stats.avg_latency_ns / 1000;
@@ -125,7 +121,7 @@ ReportClientSideStats(
 
   std::string client_library_detail = "    ";
   if (include_lib_stats) {
-    if (protocol == cb::ProtocolType::GRPC) {
+    if (protocol == ProtocolType::GRPC) {
       client_library_detail +=
           "Avg gRPC time: " + std::to_string(avg_request_time_us) + " usec (";
       if (!verbose) {
@@ -183,13 +179,13 @@ ReportClientSideStats(
 
   std::cout << client_library_detail << std::endl;
 
-  return cb::Error::Success;
+  return nic::Error::Success;
 }
 
-cb::Error
+nic::Error
 Report(
     const PerfStatus& summary, const int64_t percentile,
-    const cb::ProtocolType protocol, const bool verbose,
+    const ProtocolType protocol, const bool verbose,
     const bool include_lib_stats, const bool include_server_stats)
 {
   std::cout << "  Client: " << std::endl;
@@ -202,67 +198,62 @@ Report(
     ReportServerSideStats(summary.server_stats, 1);
   }
 
-  return cb::Error::Success;
+  return nic::Error::Success;
 }
 
 }  // namespace
 
-cb::Error
+nic::Error
 InferenceProfiler::Create(
     const bool verbose, const double stability_threshold,
     const uint64_t measurement_window_ms, const size_t max_trials,
     const int64_t percentile, const uint64_t latency_threshold_ms_,
-    const cb::ProtocolType protocol, std::shared_ptr<ModelParser>& parser,
-    std::unique_ptr<cb::ClientBackend> profile_backend,
+    const ProtocolType protocol, std::shared_ptr<ModelParser>& parser,
+    std::unique_ptr<TritonClientWrapper> profile_client,
     std::unique_ptr<LoadManager> manager,
     std::unique_ptr<InferenceProfiler>* profiler)
 {
   std::unique_ptr<InferenceProfiler> local_profiler(new InferenceProfiler(
       verbose, stability_threshold, measurement_window_ms, max_trials,
       (percentile != -1), percentile, latency_threshold_ms_, protocol, parser,
-      std::move(profile_backend), std::move(manager)));
+      std::move(profile_client), std::move(manager)));
 
   *profiler = std::move(local_profiler);
-  return cb::Error::Success;
+  return nic::Error::Success;
 }
 
 InferenceProfiler::InferenceProfiler(
     const bool verbose, const double stability_threshold,
     const int32_t measurement_window_ms, const size_t max_trials,
     const bool extra_percentile, const size_t percentile,
-    const uint64_t latency_threshold_ms_, const cb::ProtocolType protocol,
+    const uint64_t latency_threshold_ms_, const ProtocolType protocol,
     std::shared_ptr<ModelParser>& parser,
-    std::unique_ptr<cb::ClientBackend> profile_backend,
+    std::unique_ptr<TritonClientWrapper> profile_client,
     std::unique_ptr<LoadManager> manager)
     : verbose_(verbose), measurement_window_ms_(measurement_window_ms),
       max_trials_(max_trials), extra_percentile_(extra_percentile),
       percentile_(percentile), latency_threshold_ms_(latency_threshold_ms_),
       protocol_(protocol), parser_(parser),
-      profile_backend_(std::move(profile_backend)), manager_(std::move(manager))
+      profile_client_(std::move(profile_client)), manager_(std::move(manager))
 {
   load_parameters_.stability_threshold = stability_threshold;
   load_parameters_.stability_window = 3;
-  if (profile_backend_->Kind() == cb::BackendKind::TRITON) {
-    // Measure and report client library stats only when the model
-    // is not decoupled.
-    include_lib_stats_ = (!parser_->IsDecoupled());
-    // Measure and report server statistics only when the server
-    // supports the statistics extension.
-    std::set<std::string> extensions;
-    profile_backend_->ServerExtensions(&extensions);
-    include_server_stats_ = (extensions.find("statistics") != extensions.end());
-  } else {
-    include_lib_stats_ = true;
-    include_server_stats_ = false;
-  }
+  // Measure and report client library stats only when the model
+  // is not decoupled.
+  include_lib_stats_ = (!parser_->IsDecoupled());
+  // Measure and report server statistics only when the server
+  // supports the statistics extension.
+  std::set<std::string> extensions;
+  profile_client_->ServerExtensions(&extensions);
+  include_server_stats_ = (extensions.find("statistics") != extensions.end());
 }
 
-cb::Error
+nic::Error
 InferenceProfiler::Profile(
     const size_t concurrent_request_count, std::vector<PerfStatus>& summary,
     bool* meets_threshold)
 {
-  cb::Error err;
+  nic::Error err;
   PerfStatus status_summary;
 
   status_summary.concurrency = concurrent_request_count;
@@ -301,15 +292,15 @@ InferenceProfiler::Profile(
     return err;
   }
 
-  return cb::Error::Success;
+  return nic::Error::Success;
 }
 
-cb::Error
+nic::Error
 InferenceProfiler::Profile(
     const double request_rate, std::vector<PerfStatus>& summary,
     bool* meets_threshold)
 {
-  cb::Error err;
+  nic::Error err;
   PerfStatus status_summary;
 
   status_summary.request_rate = request_rate;
@@ -345,14 +336,15 @@ InferenceProfiler::Profile(
     return err;
   }
 
-  return cb::Error::Success;
+  return nic::Error::Success;
 }
 
-cb::Error
+
+nic::Error
 InferenceProfiler::Profile(
     std::vector<PerfStatus>& summary, bool* meets_threshold)
 {
-  cb::Error err;
+  nic::Error err;
   PerfStatus status_summary;
 
   RETURN_IF_ERROR(
@@ -388,17 +380,17 @@ InferenceProfiler::Profile(
     return err;
   }
 
-  return cb::Error::Success;
+  return nic::Error::Success;
 }
 
-cb::Error
+nic::Error
 InferenceProfiler::ProfileHelper(
     const bool clean_starts, PerfStatus& status_summary, bool* is_stable)
 {
   // Start measurement
   LoadStatus load_status;
   size_t completed_trials = 0;
-  std::queue<cb::Error> error;
+  std::queue<nic::Error> error;
 
   do {
     RETURN_IF_ERROR(manager_->CheckHealth());
@@ -446,7 +438,7 @@ InferenceProfiler::ProfileHelper(
         }
       } else {
         std::cout << "  Pass [" << (completed_trials + 1)
-                  << "] cb::Error: " << error.back().Message() << std::endl;
+                  << "] Error: " << error.back().Message() << std::endl;
       }
     }
 
@@ -510,33 +502,33 @@ InferenceProfiler::ProfileHelper(
   }
 
   if (early_exit) {
-    return cb::Error("Received exit signal.");
+    return nic::Error("Received exit signal.");
   }
-  return cb::Error::Success;
+  return nic::Error::Success;
 }
 
-cb::Error
+nic::Error
 InferenceProfiler::GetServerSideStatus(
-    std::map<cb::ModelIdentifier, cb::ModelStatistics>* model_stats)
+    std::map<ModelIdentifier, ModelStatistics>* model_stats)
 {
   if ((parser_->SchedulerType() == ModelParser::ENSEMBLE) ||
       (parser_->SchedulerType() == ModelParser::ENSEMBLE_SEQUENCE)) {
-    RETURN_IF_ERROR(profile_backend_->ModelInferenceStatistics(model_stats));
+    RETURN_IF_ERROR(profile_client_->ModelInferenceStatistics(model_stats));
   } else {
-    RETURN_IF_ERROR(profile_backend_->ModelInferenceStatistics(
+    RETURN_IF_ERROR(profile_client_->ModelInferenceStatistics(
         model_stats, parser_->ModelName(), parser_->ModelVersion()));
   }
-  return cb::Error::Success;
+  return nic::Error::Success;
 }
 
 // Used for measurement
-cb::Error
+nic::Error
 InferenceProfiler::Measure(PerfStatus& status_summary)
 {
-  std::map<cb::ModelIdentifier, cb::ModelStatistics> start_status;
-  std::map<cb::ModelIdentifier, cb::ModelStatistics> end_status;
-  cb::InferStat start_stat;
-  cb::InferStat end_stat;
+  std::map<ModelIdentifier, ModelStatistics> start_status;
+  std::map<ModelIdentifier, ModelStatistics> end_status;
+  nic::InferStat start_stat;
+  nic::InferStat end_stat;
 
   if (include_server_stats_) {
     RETURN_IF_ERROR(GetServerSideStatus(&start_status));
@@ -562,15 +554,15 @@ InferenceProfiler::Measure(PerfStatus& status_summary)
       current_timestamps, start_status, end_status, start_stat, end_stat,
       status_summary));
 
-  return cb::Error::Success;
+  return nic::Error::Success;
 }
 
-cb::Error
+nic::Error
 InferenceProfiler::Summarize(
     const TimestampVector& timestamps,
-    const std::map<cb::ModelIdentifier, cb::ModelStatistics>& start_status,
-    const std::map<cb::ModelIdentifier, cb::ModelStatistics>& end_status,
-    const cb::InferStat& start_stat, const cb::InferStat& end_stat,
+    const std::map<ModelIdentifier, ModelStatistics>& start_status,
+    const std::map<ModelIdentifier, ModelStatistics>& end_status,
+    const nic::InferStat& start_stat, const nic::InferStat& end_stat,
     PerfStatus& summary)
 {
   size_t valid_sequence_count = 0;
@@ -594,7 +586,7 @@ InferenceProfiler::Summarize(
         start_status, end_status, &(summary.server_stats)));
   }
 
-  return cb::Error::Success;
+  return nic::Error::Success;
 }
 
 void
@@ -665,12 +657,12 @@ InferenceProfiler::ValidLatencyMeasurement(
   std::sort(valid_latencies->begin(), valid_latencies->end());
 }
 
-cb::Error
+nic::Error
 InferenceProfiler::SummarizeLatency(
     const std::vector<uint64_t>& latencies, PerfStatus& summary)
 {
   if (latencies.size() == 0) {
-    return cb::Error(
+    return nic::Error(
         "No valid requests recorded within time interval."
         " Please use a larger time window.");
   }
@@ -716,12 +708,12 @@ InferenceProfiler::SummarizeLatency(
                         : 0;
   summary.client_stats.std_us = (uint64_t)(sqrt(var_us));
 
-  return cb::Error::Success;
+  return nic::Error::Success;
 }
 
-cb::Error
+nic::Error
 InferenceProfiler::SummarizeClientStat(
-    const cb::InferStat& start_stat, const cb::InferStat& end_stat,
+    const nic::InferStat& start_stat, const nic::InferStat& end_stat,
     const uint64_t duration_ns, const size_t valid_request_count,
     const size_t valid_sequence_count, const size_t delayed_request_count,
     PerfStatus& summary)
@@ -729,7 +721,7 @@ InferenceProfiler::SummarizeClientStat(
   summary.on_sequence_model =
       ((parser_->SchedulerType() == ModelParser::SEQUENCE) ||
        (parser_->SchedulerType() == ModelParser::ENSEMBLE_SEQUENCE));
-  summary.batch_size = std::max(manager_->BatchSize(), (size_t)1);
+  summary.batch_size = manager_->BatchSize();
   summary.client_stats.request_count = valid_request_count;
   summary.client_stats.sequence_count = valid_sequence_count;
   summary.client_stats.delayed_request_count = delayed_request_count;
@@ -759,14 +751,14 @@ InferenceProfiler::SummarizeClientStat(
     }
   }
 
-  return cb::Error::Success;
+  return nic::Error::Success;
 }
 
-cb::Error
+nic::Error
 InferenceProfiler::SummarizeServerStatsHelper(
-    const cb::ModelIdentifier& model_identifier,
-    const std::map<cb::ModelIdentifier, cb::ModelStatistics>& start_status,
-    const std::map<cb::ModelIdentifier, cb::ModelStatistics>& end_status,
+    const ModelIdentifier& model_identifier,
+    const std::map<ModelIdentifier, ModelStatistics>& start_status,
+    const std::map<ModelIdentifier, ModelStatistics>& end_status,
     ServerSideStats* server_stats)
 {
   // If model_version is an empty string then look in the end status to find the
@@ -785,7 +777,7 @@ InferenceProfiler::SummarizeServerStatsHelper(
   }
 
   if (status_model_version == -1) {
-    return cb::Error("failed to determine the requested model version");
+    return nic::Error("failed to determine the requested model version");
   }
 
   const std::pair<std::string, std::string> this_id(
@@ -793,7 +785,7 @@ InferenceProfiler::SummarizeServerStatsHelper(
 
   const auto& end_itr = end_status.find(this_id);
   if (end_itr == end_status.end()) {
-    return cb::Error("missing statistics for requested model");
+    return nic::Error("missing statistics for requested model");
   } else {
     uint64_t start_infer_cnt = 0;
     uint64_t start_exec_cnt = 0;
@@ -833,14 +825,14 @@ InferenceProfiler::SummarizeServerStatsHelper(
         end_itr->second.compute_output_time_ns_ - start_compute_output_time_ns;
   }
 
-  return cb::Error::Success;
+  return nic::Error::Success;
 }
 
-cb::Error
+nic::Error
 InferenceProfiler::SummarizeServerStats(
-    const cb::ModelIdentifier& model_identifier,
-    const std::map<cb::ModelIdentifier, cb::ModelStatistics>& start_status,
-    const std::map<cb::ModelIdentifier, cb::ModelStatistics>& end_status,
+    const ModelIdentifier& model_identifier,
+    const std::map<ModelIdentifier, ModelStatistics>& start_status,
+    const std::map<ModelIdentifier, ModelStatistics>& end_status,
     ServerSideStats* server_stats)
 {
   RETURN_IF_ERROR(SummarizeServerStatsHelper(
@@ -856,19 +848,17 @@ InferenceProfiler::SummarizeServerStats(
         composing_model_identifier, start_status, end_status, &(it->second)));
   }
 
-  return cb::Error::Success;
+  return nic::Error::Success;
 }
 
-cb::Error
+nic::Error
 InferenceProfiler::SummarizeServerStats(
-    const std::map<cb::ModelIdentifier, cb::ModelStatistics>& start_status,
-    const std::map<cb::ModelIdentifier, cb::ModelStatistics>& end_status,
+    const std::map<ModelIdentifier, ModelStatistics>& start_status,
+    const std::map<ModelIdentifier, ModelStatistics>& end_status,
     ServerSideStats* server_stats)
 {
   RETURN_IF_ERROR(SummarizeServerStats(
       std::make_pair(parser_->ModelName(), parser_->ModelVersion()),
       start_status, end_status, server_stats));
-  return cb::Error::Success;
+  return nic::Error::Success;
 }
-
-}  // namespace perfanalyzer

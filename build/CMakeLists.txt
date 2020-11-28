@@ -53,15 +53,10 @@ option(TRITON_ENABLE_METRICS_GPU "Include GPU metrics support in server" ON)
 # Cloud storage
 option(TRITON_ENABLE_GCS "Include GCS Filesystem support in server" OFF)
 option(TRITON_ENABLE_S3 "Include S3 Filesystem support in server" OFF)
-option(TRITON_ENABLE_AZURE_STORAGE "Include Azure Storage Filesystem support in server" OFF)
 
 # Multiple paths may be specified by separating them with semicolon
 set(TRITON_ONNXRUNTIME_INCLUDE_PATHS "" CACHE PATH "Paths to ONNXRuntime includes")
 set(TRITON_PYTORCH_INCLUDE_PATHS "" CACHE PATH "Paths to PyTorch includes")
-# Used for the case where TensorRT is not installed under default search path,
-# i.e. Windows build, this flag should be able to remove once TensorRT backend
-# is ported to use backend API
-set(TRITON_TENSORRT_INCLUDE_PATHS "" CACHE PATH "Paths to TensorRT includes")
 set(TRITON_EXTRA_LIB_PATHS "" CACHE PATH "Extra library paths for Triton Server build")
 
 # Client
@@ -82,7 +77,6 @@ set(TRITON_MIN_COMPUTE_CAPABILITY "6.0" CACHE STRING
 set(TRITON_COMMON_REPO_TAG "main" CACHE STRING "Tag for triton-inference-server/common repo")
 set(TRITON_CORE_REPO_TAG "main" CACHE STRING "Tag for triton-inference-server/core repo")
 set(TRITON_BACKEND_REPO_TAG "main" CACHE STRING "Tag for triton-inference-server/backend repo")
-set(TRITON_THIRD_PARTY_REPO_TAG "main" CACHE STRING "Tag for triton-inference-server/third_party repo")
 
 # Version
 file(STRINGS "${CMAKE_CURRENT_SOURCE_DIR}/../VERSION" TRITON_VERSION)
@@ -256,45 +250,21 @@ ExternalProject_Add(libevent
 )
 
 #
-# Get patched third party repo
+# Build libevhtp
 #
-ExternalProject_Add(third-party-repo
-  PREFIX third-party-repo
-  GIT_REPOSITORY "https://github.com/triton-inference-server/third_party.git"
-  GIT_TAG ${TRITON_THIRD_PARTY_REPO_TAG}
-  SOURCE_DIR "${CMAKE_CURRENT_BINARY_DIR}/third-party-repo/src/third_party"
-  CONFIGURE_COMMAND ""
-  BUILD_COMMAND ""
-  INSTALL_COMMAND ""
-  TEST_COMMAND ""
-)
-
+# Need to patch due to https://github.com/criticalstack/libevhtp/issues/135
 #
-# Build patched libevhtp
-#
-if (WIN32)
-# FIXME evhtp can't be built successfully in native Windows environment
-# CMAKE_PREFIX_PATH is needed to find libevent
 ExternalProject_Add(libevhtp
   PREFIX libevhtp
-  SOURCE_DIR "${CMAKE_CURRENT_BINARY_DIR}/third-party-repo/src/third_party/libevhtp/libevhtp"
-  DOWNLOAD_COMMAND ""
-  CMAKE_CACHE_ARGS
-    -DEVHTP_DISABLE_REGEX:BOOL=ON
-    -DEVHTP_DISABLE_SSL:BOOL=ON
-    -DEVHTP_TRITON_ENABLE_HTTP_CONTIGUOUS:BOOL=ON
-    -DEVHTP_TRITON_ENABLE_TRACING:BOOL=${TRITON_ENABLE_TRACING}
-    -DCMAKE_POSITION_INDEPENDENT_CODE:BOOL=ON
-    -DCMAKE_PREFIX_PATH:PATH=${CMAKE_CURRENT_BINARY_DIR}/libevent/install
-    -DCMAKE_BUILD_TYPE:STRING=${CMAKE_BUILD_TYPE}
-    -DCMAKE_INSTALL_PREFIX:PATH=${CMAKE_CURRENT_BINARY_DIR}/libevhtp/install
-  DEPENDS libevent third-party-repo
-)
-else()
-ExternalProject_Add(libevhtp
-  PREFIX libevhtp
-  SOURCE_DIR "${CMAKE_CURRENT_BINARY_DIR}/third-party-repo/src/third_party/libevhtp/libevhtp"
-  DOWNLOAD_COMMAND ""
+  URL "https://github.com/criticalstack/libevhtp/archive/1.2.18.zip"
+  URL_HASH SHA256=3194dc6eb4e8d6aa1e7dd3dc60bfbe066f38f9a0b5881463f0e149badd82a7bb
+  PATCH_COMMAND sed -i "s/LibEvent/Libevent/g" ${CMAKE_CURRENT_BINARY_DIR}/libevhtp/src/libevhtp/CMakeLists.txt
+  COMMAND patch -i ${CMAKE_SOURCE_DIR}/libevhtp/evhtp.c.patch ${CMAKE_CURRENT_BINARY_DIR}/libevhtp/src/libevhtp/evhtp.c
+  COMMAND patch -i ${CMAKE_SOURCE_DIR}/libevhtp/evhtp.h.patch ${CMAKE_CURRENT_BINARY_DIR}/libevhtp/src/libevhtp/include/evhtp/evhtp.h
+  COMMAND patch -i ${CMAKE_SOURCE_DIR}/libevhtp/thread.c.patch ${CMAKE_CURRENT_BINARY_DIR}/libevhtp/src/libevhtp/thread.c
+  COMMAND patch -i ${CMAKE_SOURCE_DIR}/libevhtp/thread.h.patch ${CMAKE_CURRENT_BINARY_DIR}/libevhtp/src/libevhtp/include/evhtp/thread.h
+  COMMAND patch -i ${CMAKE_SOURCE_DIR}/libevhtp/config.h.in.patch ${CMAKE_CURRENT_BINARY_DIR}/libevhtp/src/libevhtp/include/evhtp/config.h.in
+  SOURCE_DIR "${CMAKE_CURRENT_BINARY_DIR}/libevhtp/src/libevhtp"
   CMAKE_CACHE_ARGS
     -DEVHTP_DISABLE_REGEX:BOOL=ON
     -DEVHTP_DISABLE_SSL:BOOL=ON
@@ -304,9 +274,8 @@ ExternalProject_Add(libevhtp
     -DLibevent_DIR:PATH=${CMAKE_CURRENT_BINARY_DIR}/libevent/install/lib/cmake/libevent
     -DCMAKE_BUILD_TYPE:STRING=${CMAKE_BUILD_TYPE}
     -DCMAKE_INSTALL_PREFIX:PATH=${CMAKE_CURRENT_BINARY_DIR}/libevhtp/install
-  DEPENDS libevent third-party-repo
+  DEPENDS libevent
 )
-endif()
 
 #
 # Build Prometheus C++ library
@@ -369,34 +338,17 @@ ExternalProject_Add(google-cloud-cpp
 )
 
 #
-# Build azure-storage-cpplite 
-#
-ExternalProject_Add(azure-storage-cpplite
-  PREFIX azure-storage-cpplite
-  GIT_REPOSITORY "https://github.com/Azure/azure-storage-cpplite.git"
-  GIT_TAG "v0.3.0"
-  SOURCE_DIR "${CMAKE_CURRENT_BINARY_DIR}/azure-storage-cpplite/src/azure-storage-cpplite"
-  CMAKE_CACHE_ARGS
-    -DBUILD_SHARED_LIBS:BOOL=OFF
-    -DCMAKE_POSITION_INDEPENDENT_CODE:BOOL=ON
-    -DCMAKE_BUILD_TYPE:STRING=${CMAKE_BUILD_TYPE}
-    -DCURL_INCLUDE_DIR=${CMAKE_CURRENT_BINARY_DIR}/curl/install/include
-    -DCURL_LIBRARY=${CMAKE_CURRENT_BINARY_DIR}/curl/install/lib
-    -DCMAKE_INSTALL_PREFIX:PATH=${CMAKE_CURRENT_BINARY_DIR}/azure-storage-cpplite/install
-  DEPENDS curl
-)
-
-#
 # Build CNMeM (CUDA memeory management library)
 #
 ExternalProject_Add(cnmem
   PREFIX cnmem
-  SOURCE_DIR "${CMAKE_CURRENT_BINARY_DIR}/third-party-repo/src/third_party/cnmem/cnmem"
-  DOWNLOAD_COMMAND ""
+  GIT_REPOSITORY "https://github.com/NVIDIA/cnmem.git"
+  GIT_TAG "37896cc9bfc6536a8c878a1e675835c22d827821"
+  PATCH_COMMAND sed -i "s/SHARED/STATIC/g" ${CMAKE_CURRENT_BINARY_DIR}/cnmem/src/cnmem/CMakeLists.txt
+  SOURCE_DIR "${CMAKE_CURRENT_BINARY_DIR}/cnmem/src/cnmem"
   CMAKE_CACHE_ARGS
     -DCMAKE_POSITION_INDEPENDENT_CODE:BOOL=ON
     -DCMAKE_INSTALL_PREFIX:PATH=${CMAKE_CURRENT_BINARY_DIR}/cnmem
-    DEPENDS third-party-repo
 )
 
 #
@@ -502,9 +454,6 @@ endif() # TRITON_ENABLE_GCS
 if(${TRITON_ENABLE_S3})
   set(TRITON_DEPENDS ${TRITON_DEPENDS} aws-sdk-cpp)
 endif() # TRITON_ENABLE_S3
-if(${TRITON_ENABLE_AZURE_STORAGE})
-  set(TRITON_DEPENDS ${TRITON_DEPENDS} azure-storage-cpplite)
-endif() # TRITON_ENABLE_AZURE_STORAGE
 if(${TRITON_ENABLE_HTTP} OR ${TRITON_ENABLE_METRICS})
   set(TRITON_DEPENDS ${TRITON_DEPENDS} libevent libevhtp)
 endif() # TRITON_ENABLE_HTTP || TRITON_ENABLE_METRICS
@@ -532,7 +481,6 @@ ExternalProject_Add(server
     -Dlibevhtp_DIR:PATH=${CMAKE_CURRENT_BINARY_DIR}/libevhtp/install/lib/cmake/libevhtp
     -Dprometheus-cpp_DIR:PATH=${CMAKE_CURRENT_BINARY_DIR}/prometheus-cpp/install/lib/cmake/prometheus-cpp
     -Dstorage_client_DIR:PATH=${CMAKE_CURRENT_BINARY_DIR}/google-cloud-cpp/install/lib/cmake/storage_client
-    -Dazure-storage-cpplite_DIR:PATH=${CMAKE_CURRENT_BINARY_DIR}/azure-storage-cpplite/install
     -Dgoogle_cloud_cpp_common_DIR:PATH=${CMAKE_CURRENT_BINARY_DIR}/google-cloud-cpp/install/lib/cmake/google_cloud_cpp_common
     -DCrc32c_DIR:PATH=${CMAKE_CURRENT_BINARY_DIR}/crc32c/lib/cmake/Crc32c
     -DAWSSDK_DIR:PATH=${CMAKE_CURRENT_BINARY_DIR}/aws-sdk-cpp/install/lib/cmake/AWSSDK
@@ -547,7 +495,6 @@ ExternalProject_Add(server
     -DTRITON_BACKEND_REPO_TAG:STRING=${TRITON_BACKEND_REPO_TAG}
     -DTRITON_ONNXRUNTIME_INCLUDE_PATHS:PATH=${TRITON_ONNXRUNTIME_INCLUDE_PATHS}
     -DTRITON_PYTORCH_INCLUDE_PATHS:PATH=${TRITON_PYTORCH_INCLUDE_PATHS}
-    -DTRITON_TENSORRT_INCLUDE_PATHS:PATH=${TRITON_TENSORRT_INCLUDE_PATHS}
     -DTRITON_EXTRA_LIB_PATHS:PATH=${TRITON_EXTRA_LIB_PATHS}
     -DTRITON_ENABLE_ASAN:BOOL=${TRITON_ENABLE_ASAN}
     -DTRITON_ENABLE_NVTX:BOOL=${TRITON_ENABLE_NVTX}
@@ -561,7 +508,6 @@ ExternalProject_Add(server
     -DTRITON_ENABLE_METRICS:BOOL=${TRITON_ENABLE_METRICS}
     -DTRITON_ENABLE_METRICS_GPU:BOOL=${TRITON_ENABLE_METRICS_GPU}
     -DTRITON_ENABLE_GCS:BOOL=${TRITON_ENABLE_GCS}
-    -DTRITON_ENABLE_AZURE_STORAGE:BOOL=${TRITON_ENABLE_AZURE_STORAGE}
     -DTRITON_ENABLE_S3:BOOL=${TRITON_ENABLE_S3}
     -DTRITON_ENABLE_TENSORFLOW:BOOL=${TRITON_ENABLE_TENSORFLOW}
     -DTRITON_ENABLE_PYTHON:BOOL=${TRITON_ENABLE_PYTHON}

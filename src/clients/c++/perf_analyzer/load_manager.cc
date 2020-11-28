@@ -26,6 +26,7 @@
 
 #include "src/clients/c++/perf_analyzer/load_manager.h"
 #include "src/clients/c++/examples/shm_utils.h"
+#include "src/core/model_config.h"
 
 #include <algorithm>
 
@@ -36,16 +37,13 @@
   {                                                                            \
     const cudaError_t result = FUNC;                                           \
     if (result != cudaSuccess) {                                               \
-      return cb::Error(                                                        \
+      return nic::Error(                                                       \
           "CUDA exception (line " + std::to_string(__LINE__) + "): " +         \
           cudaGetErrorName(result) + " (" + cudaGetErrorString(result) + ")"); \
     }                                                                          \
   }
 
 #endif  // TRITON_ENABLE_GPU
-
-namespace perfanalyzer {
-
 
 namespace {
 
@@ -62,7 +60,7 @@ TensorToRegionName(std::string name)
 }
 
 #ifdef TRITON_ENABLE_GPU
-cb::Error
+nic::Error
 CreateCUDAIPCHandle(
     cudaIpcMemHandle_t* cuda_handle, void* input_d_ptr, int device_id = 0)
 {
@@ -72,25 +70,26 @@ CreateCUDAIPCHandle(
   //  Create IPC handle for data on the gpu
   RETURN_IF_CUDA_ERR(cudaIpcGetMemHandle(cuda_handle, input_d_ptr));
 
-  return cb::Error::Success;
+  return nic::Error::Success;
 }
 
 #endif  // TRITON_ENABLE_GPU
+
 
 }  // namespace
 
 LoadManager::~LoadManager()
 {
-  cb::Error err;
-  if (using_shared_memory_ && backend_.get() != nullptr) {
-    err = backend_->UnregisterAllSharedMemory();
+  nic::Error err;
+  if (client_.get() != nullptr) {
+    err = client_->UnregisterAllSharedMemory();
     if (!err.IsOk()) {
       std::cerr << "Unable to unregister all shared memory regions"
                 << std::endl;
     }
     if (shared_memory_type_ == SharedMemoryType::SYSTEM_SHARED_MEMORY) {
       for (auto region : shared_memory_regions_) {
-        err = backend_->UnmapSharedMemory(
+        err = nic::UnmapSharedMemory(
             shared_memory_regions_[region.first].first,
             shared_memory_regions_[region.first].second);
         if (!err.IsOk()) {
@@ -101,7 +100,7 @@ LoadManager::~LoadManager()
                     << ", size: " << shared_memory_regions_[region.first].second
                     << std::endl;
         }
-        err = backend_->UnlinkSharedMemoryRegion(region.first);
+        err = nic::UnlinkSharedMemoryRegion(region.first);
         if (!err.IsOk()) {
           std::cerr << "Unable to unlink shared memory with key: "
                     << region.first << std::endl;
@@ -127,7 +126,7 @@ LoadManager::~LoadManager()
   }
 }
 
-cb::Error
+nic::Error
 LoadManager::CheckHealth()
 {
   // Check thread status to make sure that the load setting is
@@ -137,18 +136,18 @@ LoadManager::CheckHealth()
   // when derived class destructor gets called.
   for (auto& thread_stat : threads_stat_) {
     if (!thread_stat->status_.IsOk()) {
-      return cb::Error(
+      return nic::Error(
           "Failed to maintain requested inference load."
           " Worker thread(s) failed to generate concurrent requests.");
     }
     if (!thread_stat->cb_status_.IsOk()) {
-      return cb::Error("Failed to retrieve results from inference request.");
+      return nic::Error("Failed to retrieve results from inference request.");
     }
   }
-  return cb::Error::Success;
+  return nic::Error::Success;
 }
 
-cb::Error
+nic::Error
 LoadManager::SwapTimestamps(TimestampVector& new_timestamps)
 {
   TimestampVector total_timestamp;
@@ -163,11 +162,11 @@ LoadManager::SwapTimestamps(TimestampVector& new_timestamps)
   }
   // Swap the results
   total_timestamp.swap(new_timestamps);
-  return cb::Error::Success;
+  return nic::Error::Success;
 }
 
-cb::Error
-LoadManager::GetAccumulatedClientStat(cb::InferStat* contexts_stat)
+nic::Error
+LoadManager::GetAccumulatedClientStat(nic::InferStat* contexts_stat)
 {
   for (auto& thread_stat : threads_stat_) {
     std::lock_guard<std::mutex> lock(thread_stat->mu_);
@@ -182,20 +181,21 @@ LoadManager::GetAccumulatedClientStat(cb::InferStat* contexts_stat)
           context_stat.cumulative_receive_time_ns;
     }
   }
-  return cb::Error::Success;
+  return nic::Error::Success;
 }
+
 
 LoadManager::LoadManager(
     const bool async, const bool streaming, const int32_t batch_size,
     const size_t max_threads, const size_t sequence_length,
     const SharedMemoryType shared_memory_type, const size_t output_shm_size,
     const std::shared_ptr<ModelParser>& parser,
-    const std::shared_ptr<cb::ClientBackendFactory>& factory)
+    const std::shared_ptr<TritonClientFactory>& factory)
     : async_(async), streaming_(streaming), batch_size_(batch_size),
       max_threads_(max_threads), sequence_length_(sequence_length),
       shared_memory_type_(shared_memory_type),
       output_shm_size_(output_shm_size), parser_(parser), factory_(factory),
-      using_json_data_(false), using_shared_memory_(false), next_seq_id_(1)
+      using_json_data_(false), next_seq_id_(1)
 {
   on_sequence_model_ =
       ((parser_->SchedulerType() == ModelParser::SEQUENCE) ||
@@ -204,13 +204,11 @@ LoadManager::LoadManager(
   data_loader_.reset(new DataLoader(batch_size));
 }
 
-cb::Error
+nic::Error
 LoadManager::InitManagerInputs(
     const size_t string_length, const std::string& string_data,
     const bool zero_input, std::vector<std::string>& user_data)
 {
-  RETURN_IF_ERROR(factory_->CreateClientBackend(&backend_));
-
   // Read provided data
   if (!user_data.empty()) {
     if (IsDirectory(user_data[0])) {
@@ -238,16 +236,17 @@ LoadManager::InitManagerInputs(
   // Reserve the required vector space
   threads_stat_.reserve(max_threads_);
 
-  return cb::Error::Success;
+  return nic::Error::Success;
 }
 
-cb::Error
+
+nic::Error
 LoadManager::InitSharedMemory()
 {
-  using_shared_memory_ = true;
+  RETURN_IF_ERROR(factory_->CreateTritonClient(&client_));
 
   // Calling this function for the clean start
-  backend_->UnregisterAllSharedMemory();
+  client_->UnregisterAllSharedMemory();
 
   // Allocate the shared memory for outputs
   for (const auto& output : *(parser_->Outputs())) {
@@ -263,20 +262,20 @@ LoadManager::InitSharedMemory()
       std::string shm_key("/" + region_name);
       int shm_fd_op;
       RETURN_IF_ERROR(
-          backend_->CreateSharedMemoryRegion(shm_key, alloc_size, &shm_fd_op));
-      RETURN_IF_ERROR(backend_->MapSharedMemory(
+          nic::CreateSharedMemoryRegion(shm_key, alloc_size, &shm_fd_op));
+      RETURN_IF_ERROR(nic::MapSharedMemory(
           shm_fd_op, 0, alloc_size, (void**)&output_shm_ptr));
 
       shared_memory_regions_[region_name] =
           std::pair<uint8_t*, size_t>(output_shm_ptr, alloc_size);
 
-      RETURN_IF_ERROR(backend_->RegisterSystemSharedMemory(
+      RETURN_IF_ERROR(client_->RegisterSystemSharedMemory(
           region_name, shm_key, alloc_size));
     } else {
 #ifdef TRITON_ENABLE_GPU
       cudaError_t cuda_err = cudaMalloc((void**)&output_shm_ptr, alloc_size);
       if (cuda_err != cudaSuccess) {
-        return cb::Error(
+        return nic::Error(
             "unable to allocate memory of " + std::to_string(alloc_size) +
             " bytes on gpu for output " + output.first + " : " +
             std::string(cudaGetErrorString(cuda_err)));
@@ -287,11 +286,12 @@ LoadManager::InitSharedMemory()
       cudaIpcMemHandle_t cuda_handle;
       RETURN_IF_ERROR(CreateCUDAIPCHandle(&cuda_handle, (void*)output_shm_ptr));
       // Using GPU with device id 0
-      RETURN_IF_ERROR(backend_->RegisterCudaSharedMemory(
+      RETURN_IF_ERROR(client_->RegisterCudaSharedMemory(
           region_name, cuda_handle, alloc_size));
 #endif  // TRITON_ENABLE_GPU
     }
   }
+
 
   for (const auto& input : *(parser_->Inputs())) {
     for (int i = 0; i < (int)data_loader_->GetDataStreamsCount(); i++) {
@@ -317,7 +317,7 @@ LoadManager::InitSharedMemory()
               prev_shape = shape;
             } else {
               if (!std::equal(shape.begin(), shape.end(), prev_shape.begin())) {
-                return cb::Error(
+                return nic::Error(
                     "can not batch tensors with different shapes together "
                     "(input '" +
                     input.first + "' expected shape " +
@@ -344,14 +344,14 @@ LoadManager::InitSharedMemory()
               input.second, i, (j + count) % data_loader_->GetTotalSteps(i),
               &data_ptr, &batch1_bytesize));
           if (batch1_bytesize != byte_size.back()) {
-            return cb::Error(
+            return nic::Error(
                 "The shape tensors should be identical in a batch (mismatch in "
                 "size)");
           }
 
           for (size_t data_idx = 0; data_idx < batch1_bytesize; data_idx++) {
             if (*(data_ptr + data_idx) != *(data_ptrs.back() + data_idx)) {
-              return cb::Error(
+              return nic::Error(
                   "The shape tensors should be identical in a batch (mismatch "
                   "in content)");
             }
@@ -368,9 +368,9 @@ LoadManager::InitSharedMemory()
         if (shared_memory_type_ == SharedMemoryType::SYSTEM_SHARED_MEMORY) {
           std::string shm_key("/" + region_name);
           int shm_fd_ip;
-          RETURN_IF_ERROR(backend_->CreateSharedMemoryRegion(
-              shm_key, alloc_size, &shm_fd_ip));
-          RETURN_IF_ERROR(backend_->MapSharedMemory(
+          RETURN_IF_ERROR(
+              nic::CreateSharedMemoryRegion(shm_key, alloc_size, &shm_fd_ip));
+          RETURN_IF_ERROR(nic::MapSharedMemory(
               shm_fd_ip, 0, alloc_size, (void**)&input_shm_ptr));
           shared_memory_regions_[region_name] =
               std::pair<uint8_t*, size_t>(input_shm_ptr, alloc_size);
@@ -386,13 +386,13 @@ LoadManager::InitSharedMemory()
           }
 
           // Register the region with triton
-          RETURN_IF_ERROR(backend_->RegisterSystemSharedMemory(
+          RETURN_IF_ERROR(client_->RegisterSystemSharedMemory(
               region_name, shm_key, alloc_size));
         } else {
 #ifdef TRITON_ENABLE_GPU
           cudaError_t cuda_err = cudaMalloc((void**)&input_shm_ptr, alloc_size);
           if (cuda_err != cudaSuccess) {
-            return cb::Error(
+            return nic::Error(
                 "unable to allocate memory of " + std::to_string(alloc_size) +
                 "bytes on gpu for input " + region_name + " : " +
                 std::string(cudaGetErrorString(cuda_err)));
@@ -410,7 +410,7 @@ LoadManager::InitSharedMemory()
                 (void*)(input_shm_ptr + offset), (void*)data_ptrs[count],
                 byte_size[count], cudaMemcpyHostToDevice);
             if (cuda_err != cudaSuccess) {
-              return cb::Error(
+              return nic::Error(
                   "Failed to copy data to cuda shared memory for " +
                   region_name + " : " +
                   std::string(cudaGetErrorString(cuda_err)));
@@ -424,17 +424,17 @@ LoadManager::InitSharedMemory()
               CreateCUDAIPCHandle(&cuda_handle, (void*)input_shm_ptr));
 
           // Register the region with triton
-          RETURN_IF_ERROR(backend_->RegisterCudaSharedMemory(
+          RETURN_IF_ERROR(client_->RegisterCudaSharedMemory(
               region_name, cuda_handle, alloc_size));
 #endif  // TRITON_ENABLE_GPU
         }
       }
     }
   }
-  return cb::Error::Success;
+  return nic::Error::Success;
 }
 
-cb::Error
+nic::Error
 LoadManager::PrepareInfer(InferContext* ctx)
 {
   // Initialize inputs
@@ -444,44 +444,42 @@ LoadManager::PrepareInfer(InferContext* ctx)
     // Set input shape before getting the input data
     std::vector<int64_t> shape;
     RETURN_IF_ERROR(data_loader_->GetInputShape(input.second, 0, 0, &shape));
-    if (shape.empty() && (backend_->Kind() == cb::BackendKind::TRITON)) {
-      return cb::Error("unable to set shape for the input");
+    if (!shape.empty()) {
+      if ((parser_->MaxBatchSize() != 0) && (!input.second.is_shape_tensor_)) {
+        shape.insert(shape.begin(), (int64_t)batch_size_);
+      }
+    } else {
+      return nic::Error("unable to set shape for the input");
     }
 
-    if ((parser_->MaxBatchSize() != 0) && (!input.second.is_shape_tensor_)) {
-      shape.insert(shape.begin(), (int64_t)batch_size_);
-    }
-
-    cb::InferInput* infer_input;
-    RETURN_IF_ERROR(cb::InferInput::Create(
-        &infer_input, backend_->Kind(), input.first, shape,
-        input.second.datatype_));
+    nic::InferInput* infer_input;
+    RETURN_IF_ERROR(nic::InferInput::Create(
+        &infer_input, input.first, shape, input.second.datatype_));
     ctx->inputs_.push_back(infer_input);
 
     RETURN_IF_ERROR(data_loader_->GetInputData(
         input.second, 0, 0, &data_ptr, &batch1_bytesize));
 
-    if (!shape.empty()) {
-      size_t max_count = (parser_->MaxBatchSize() == 0) ? 1 : batch_size_;
-      for (size_t i = 0; i < max_count; ++i) {
-        RETURN_IF_ERROR(infer_input->AppendRaw(data_ptr, batch1_bytesize));
-      }
+    size_t max_count = (parser_->MaxBatchSize() == 0) ? 1 : batch_size_;
+    for (size_t i = 0; i < max_count; ++i) {
+      RETURN_IF_ERROR(infer_input->AppendRaw(data_ptr, batch1_bytesize));
     }
   }
 
   for (const auto& output : *(parser_->Outputs())) {
     std::string region_name(TensorToRegionName(output.first));
 
-    cb::InferRequestedOutput* requested_output;
-    RETURN_IF_ERROR(cb::InferRequestedOutput::Create(
-        &requested_output, backend_->Kind(), output.first));
+    nic::InferRequestedOutput* requested_output;
+    RETURN_IF_ERROR(
+        nic::InferRequestedOutput::Create(&requested_output, output.first));
     ctx->outputs_.push_back(requested_output);
   }
 
-  return cb::Error::Success;
+  return nic::Error::Success;
 }
 
-cb::Error
+
+nic::Error
 LoadManager::PrepareSharedMemoryInfer(InferContext* ctx)
 {
   for (const auto& input : *(parser_->Inputs())) {
@@ -496,13 +494,12 @@ LoadManager::PrepareSharedMemoryInfer(InferContext* ctx)
         shape.insert(shape.begin(), (int64_t)batch_size_);
       }
     } else {
-      return cb::Error("unable to set shape for the input");
+      return nic::Error("unable to set shape for the input");
     }
 
-    cb::InferInput* infer_input;
-    RETURN_IF_ERROR(cb::InferInput::Create(
-        &infer_input, backend_->Kind(), input.first, shape,
-        input.second.datatype_));
+    nic::InferInput* infer_input;
+    RETURN_IF_ERROR(nic::InferInput::Create(
+        &infer_input, input.first, shape, input.second.datatype_));
     ctx->inputs_.push_back(infer_input);
 
     RETURN_IF_ERROR(infer_input->SetSharedMemory(
@@ -512,33 +509,34 @@ LoadManager::PrepareSharedMemoryInfer(InferContext* ctx)
   for (const auto& output : *(parser_->Outputs())) {
     std::string region_name(TensorToRegionName(output.first));
 
-    cb::InferRequestedOutput* requested_output;
-    RETURN_IF_ERROR(cb::InferRequestedOutput::Create(
-        &requested_output, backend_->Kind(), output.first));
+    nic::InferRequestedOutput* requested_output;
+    RETURN_IF_ERROR(
+        nic::InferRequestedOutput::Create(&requested_output, output.first));
     ctx->outputs_.push_back(requested_output);
 
     RETURN_IF_ERROR(requested_output->SetSharedMemory(
         region_name, shared_memory_regions_[region_name].second));
   }
 
-  return cb::Error::Success;
+  return nic::Error::Success;
 }
 
-cb::Error
+
+nic::Error
 LoadManager::UpdateInputs(
-    std::vector<cb::InferInput*>& inputs, int stream_index, int step_index)
+    std::vector<nic::InferInput*>& inputs, int stream_index, int step_index)
 {
   // Validate update parameters here
   size_t data_stream_count = data_loader_->GetDataStreamsCount();
   if (stream_index < 0 || stream_index >= (int)data_stream_count) {
-    return cb::Error(
+    return nic::Error(
         "stream_index for retrieving the data should be less than " +
         std::to_string(data_stream_count) + ", got " +
         std::to_string(stream_index));
   }
   size_t step_count = data_loader_->GetTotalSteps(stream_index);
   if (step_index < 0 || step_index >= (int)step_count) {
-    return cb::Error(
+    return nic::Error(
         "step_id for retrieving the data should be less than " +
         std::to_string(step_count) + ", got " + std::to_string(step_index));
   }
@@ -549,12 +547,12 @@ LoadManager::UpdateInputs(
     RETURN_IF_ERROR(SetInputsSharedMemory(inputs, stream_index, step_index));
   }
 
-  return cb::Error::Success;
+  return nic::Error::Success;
 }
 
-cb::Error
+nic::Error
 LoadManager::SetInputs(
-    const std::vector<cb::InferInput*>& inputs, const int stream_index,
+    const std::vector<nic::InferInput*>& inputs, const int stream_index,
     const int step_index)
 {
   for (const auto& input : inputs) {
@@ -581,7 +579,7 @@ LoadManager::SetInputs(
           input->SetShape(shape);
         } else {
           if (!std::equal(shape.begin(), shape.end(), input->Shape().begin())) {
-            return cb::Error(
+            return nic::Error(
                 "can not batch tensors with different shapes together "
                 "(input '" +
                 input->Name() + "' expected shape " +
@@ -616,7 +614,7 @@ LoadManager::SetInputs(
             }
           }
           if (!is_identical) {
-            return cb::Error(
+            return nic::Error(
                 "can not batch shape tensors with different values together "
                 "(input '" +
                 input->Name() + "' expected shape values" +
@@ -630,12 +628,12 @@ LoadManager::SetInputs(
       }
     }
   }
-  return cb::Error::Success;
+  return nic::Error::Success;
 }
 
-cb::Error
+nic::Error
 LoadManager::SetInputsSharedMemory(
-    const std::vector<cb::InferInput*>& inputs, const int stream_index,
+    const std::vector<nic::InferInput*>& inputs, const int stream_index,
     const int step_index)
 {
   for (const auto& input : inputs) {
@@ -658,8 +656,9 @@ LoadManager::SetInputsSharedMemory(
     RETURN_IF_ERROR(input->SetSharedMemory(
         region_name, shared_memory_regions_[region_name].second));
   }
-  return cb::Error::Success;
+  return nic::Error::Success;
 }
+
 
 void
 LoadManager::InitNewSequence(int sequence_id)
@@ -715,5 +714,3 @@ LoadManager::StopWorkerThreads()
     cnt++;
   }
 }
-
-}  // namespace perfanalyzer

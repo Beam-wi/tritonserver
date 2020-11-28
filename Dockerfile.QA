@@ -30,7 +30,7 @@
 
 ARG BASE_IMAGE=tritonserver
 ARG BUILD_IMAGE=tritonserver_build
-ARG SDK_IMAGE=tritonserver_sdk
+ARG CLIENT_IMAGE=tritonserver_client
 ARG TRITON_COMMON_REPO_TAG=main
 ARG TRITON_CORE_REPO_TAG=main
 
@@ -89,6 +89,8 @@ RUN mkdir -p qa/common && \
     cp -r docs/examples/model_repository/simple qa/L0_shared_memory/models/. && \
     mkdir qa/L0_cuda_shared_memory/models && \
     cp -r docs/examples/model_repository/simple qa/L0_cuda_shared_memory/models/. && \
+    cp -r /workspace/docs/examples/model_repository/simple qa/L0_client_timeout/models && \
+    cp -r /workspace/docs/examples/model_repository/simple_sequence qa/L0_client_timeout/models/. && \
     mkdir qa/L0_grpc/models && \
     cp -r /workspace/docs/examples/model_repository/simple qa/L0_grpc/models && \
     cp -r /workspace/docs/examples/model_repository/simple_dyna_sequence qa/L0_grpc/models && \
@@ -109,7 +111,6 @@ RUN mkdir -p qa/common && \
     cp -r docs/examples/model_repository/simple qa/L0_secure_grpc/models/. && \
     cp /tmp/tritonbuild/install/bin/simple qa/L0_simple_lib/. && \
     cp /tmp/tritonbuild/install/bin/memory_alloc qa/L0_io/. && \
-    cp /tmp/tritonbuild/install/bin/multi_server qa/L0_multi_server/. && \
     cp /tmp/tritonbuild/tritonserver/build/test-util/install/bin/memory_test qa/L0_memory/. && \
     cp /tmp/tritonbuild/tritonserver/build/test-util/install/bin/rate_limiter_test qa/L0_rate_limiter/.
 
@@ -224,14 +225,6 @@ RUN cp /tmp/tritonbuild/tritonserver/build/test-util/install/lib/libidentity.so 
     mkdir -p qa/L0_perf_nomodel_cudashm && \
     cp -r qa/L0_perf_nomodel/. qa/L0_perf_nomodel_cudashm
 
-# L0_model_control_stress will not be present if gitlab tests are not available
-RUN if [ -d qa/L0_model_control_stress ]; then \
-        mkdir -p qa/L0_model_control_stress_valgrind && \
-            cp -r qa/L0_model_control_stress/. qa/L0_model_control_stress_valgrind && \
-            mkdir -p qa/L0_model_control_stress_valgrind_massif && \
-            cp -r qa/L0_model_control_stress/. qa/L0_model_control_stress_valgrind_massif; \
-    fi
-
 RUN cp /tmp/tritonbuild/install/backends/repeat/libtriton_repeat.so \
         qa/L0_model_config/.
 
@@ -254,9 +247,9 @@ RUN mkdir -p qa/L0_decoupled/models/simple_repeat/1 && \
     mkdir -p qa/L0_decoupled/models/nested_square/1
 
 ############################################################################
-## Copy artifacts from sdk container
+## Copy artifacts from client container
 ############################################################################
-FROM ${SDK_IMAGE} AS sdk
+FROM ${CLIENT_IMAGE} AS client
 
 WORKDIR /workspace
 COPY --from=build /workspace/qa/ qa/
@@ -317,7 +310,7 @@ RUN rm -f /usr/bin/python && \
     ln -s /usr/bin/python3 /usr/bin/python
 
 RUN pip3 install --upgrade wheel setuptools && \
-    pip3 install --upgrade numpy pillow future grpcio requests gsutil awscli six boofuzz grpcio-channelz azure-cli 
+    pip3 install --upgrade numpy pillow future grpcio requests gsutil awscli six boofuzz grpcio-channelz
 
 # need protoc-gen-go to generate go specific gRPC modules
 RUN go get github.com/golang/protobuf/protoc-gen-go && \
@@ -327,7 +320,7 @@ RUN go get github.com/golang/protobuf/protoc-gen-go && \
 # user should own all artifacts in case CI is run using triton-server
 # user.
 WORKDIR /opt/tritonserver
-COPY --chown=1000:1000 --from=sdk /workspace/qa/ qa/
+COPY --chown=1000:1000 --from=client /workspace/qa/ qa/
 
 # Remove CI tests that are meant to run only on build image and
 # install the tritonserver/triton python client APIs.

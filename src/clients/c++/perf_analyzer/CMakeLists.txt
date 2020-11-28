@@ -31,8 +31,6 @@ if(WIN32)
 		      "are UNIX specific.")
 else()
 
-add_subdirectory(client_backend)
-
 set(
   PERF_ANALYZER_SRCS
   main.cc
@@ -43,7 +41,9 @@ set(
   concurrency_manager.cc
   request_rate_manager.cc
   custom_load_manager.cc
+  triton_client_wrapper.cc
   inference_profiler.cc
+  ../examples/shm_utils.cc
 )
 
 set(
@@ -55,7 +55,9 @@ set(
   concurrency_manager.h
   request_rate_manager.h
   custom_load_manager.h
+  triton_client_wrapper.h
   inference_profiler.h
+  ../examples/shm_utils.h
 )
 
 add_executable(
@@ -66,7 +68,10 @@ add_executable(
 )
 target_link_libraries(
   perf_analyzer
-  PRIVATE client-backend-library
+  PRIVATE triton-common-json        # from repo-common
+  PRIVATE model-config-library
+  PRIVATE TRITON::grpcclient_static
+  PRIVATE TRITON::httpclient_static
   PRIVATE -lb64
 )
 

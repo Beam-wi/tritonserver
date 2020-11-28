@@ -1,4 +1,4 @@
-// Copyright (c) 2018-2019, NVIDIA CORPORATION. All rights reserved.
+// Copyright (c) 2019, NVIDIA CORPORATION. All rights reserved.
 //
 // Redistribution and use in source and binary forms, with or without
 // modification, are permitted provided that the following conditions
@@ -23,61 +23,44 @@
 // OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
 // (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
 // OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+#pragma once
 
-#include "src/core/logging.h"
-#include <sys/time.h>
-#include <sys/types.h>
-#include <time.h>
-#include <unistd.h>
-#include <iomanip>
-#include <iostream>
+#include "src/core/constants.h"
+#include "src/core/model_config.h"
+#include "src/core/status.h"
 
 namespace nvidia { namespace inferenceserver {
 
-Logger gLogger_;
+class InferenceBackend;
 
-Logger::Logger() : enables_{true, true, true}, vlevel_(0) {}
+class LibTorchBackendFactory {
+ public:
+  struct Config : public BackendConfig {
+    // Autofill missing required model configuration settings based on
+    // model definition file.
+    bool autofill;
+  };
 
-void
-Logger::Log(const std::string& msg)
-{
-  std::cerr << msg << std::endl;
-}
+  static Status Create(
+      const std::shared_ptr<BackendConfig>& backend_config,
+      std::unique_ptr<LibTorchBackendFactory>* factory);
 
-void
-Logger::Flush()
-{
-  std::cerr << std::flush;
-}
+  Status CreateBackend(
+      const std::string& path, const inference::ModelConfig& model_config,
+      const double min_compute_capability,
+      std::unique_ptr<InferenceBackend>* backend);
 
+  ~LibTorchBackendFactory() = default;
 
-const std::vector<char> LogMessage::level_name_{'E', 'W', 'I'};
+ private:
+  DISALLOW_COPY_AND_ASSIGN(LibTorchBackendFactory);
 
-LogMessage::LogMessage(const char* file, int line, uint32_t level)
-{
-  struct timeval tv;
-  gettimeofday(&tv, NULL);
-  struct tm tm_time;
-  gmtime_r(((time_t*)&(tv.tv_sec)), &tm_time);
-
-  std::string path(file);
-  size_t pos = path.rfind('/');
-  if (pos != std::string::npos) {
-    path = path.substr(pos + 1, std::string::npos);
+  LibTorchBackendFactory(const std::shared_ptr<Config>& backend_config)
+      : backend_config_(backend_config)
+  {
   }
 
-  stream_ << level_name_[std::min(level, (uint32_t)Level::kINFO)]
-          << std::setfill('0') << std::setw(2) << (tm_time.tm_mon + 1)
-          << std::setw(2) << tm_time.tm_mday << " " << std::setw(2)
-          << tm_time.tm_hour << ':' << std::setw(2) << tm_time.tm_min << ':'
-          << std::setw(2) << tm_time.tm_sec << "." << std::setw(6) << tv.tv_usec
-          << ' ' << static_cast<uint32_t>(getpid()) << ' ' << path << ':'
-          << line << "] ";
-}
-
-LogMessage::~LogMessage()
-{
-  gLogger_.Log(stream_.str());
-}
+  const std::shared_ptr<Config> backend_config_;
+};
 
 }}  // namespace nvidia::inferenceserver

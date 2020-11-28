@@ -30,7 +30,6 @@
 #include <condition_variable>
 #include <thread>
 
-namespace perfanalyzer {
 
 //==============================================================================
 /// RequestRateManager is a helper class to send inference requests to
@@ -76,11 +75,11 @@ class RequestRateManager : public LoadManager {
   /// \param output_shm_size The size of the shared memory to allocate for the
   /// output.
   /// \param parser The ModelParser object to get the model details.
-  /// \param factory The ClientBackendFactory object used to create
+  /// \param factory The TritonClientFactory object used to create
   /// client to the server.
   /// \param manager Returns a new ConcurrencyManager object.
-  /// \return cb::Error object indicating success or failure.
-  static cb::Error Create(
+  /// \return Error object indicating success or failure.
+  static nic::Error Create(
       const bool async, const bool streaming,
       const uint64_t measurement_window_ms, Distribution request_distribution,
       const int32_t batch_size, const size_t max_threads,
@@ -89,18 +88,18 @@ class RequestRateManager : public LoadManager {
       const bool zero_input, std::vector<std::string>& user_data,
       const SharedMemoryType shared_memory_type, const size_t output_shm_size,
       const std::shared_ptr<ModelParser>& parser,
-      const std::shared_ptr<cb::ClientBackendFactory>& factory,
+      const std::shared_ptr<TritonClientFactory>& factory,
       std::unique_ptr<LoadManager>* manager);
 
   /// Adjusts the rate of issuing requests to be the same as 'request_rate'
   /// \param request_rate The rate at which requests must be issued to the
   /// server.
-  /// \return cb::Error object indicating success or failure.
-  cb::Error ChangeRequestRate(const double target_request_rate);
+  /// \return Error object indicating success or failure.
+  nic::Error ChangeRequestRate(const double target_request_rate);
 
   /// Resets all worker thread states to beginning of schedule.
-  /// \return cb::Error object indicating success or failure.
-  cb::Error ResetWorkers() override;
+  /// \return Error object indicating success or failure.
+  nic::Error ResetWorkers() override;
 
  protected:
   struct ThreadConfig {
@@ -124,7 +123,7 @@ class RequestRateManager : public LoadManager {
       const size_t max_threads, const uint32_t num_of_sequences,
       const size_t sequence_length, const SharedMemoryType shared_memory_type,
       const size_t output_shm_size, const std::shared_ptr<ModelParser>& parser,
-      const std::shared_ptr<cb::ClientBackendFactory>& factory);
+      const std::shared_ptr<TritonClientFactory>& factory);
 
   /// Generates and update the request schedule as per the given request rate.
   /// \param request_rate The request rate to use for new schedule.
@@ -154,7 +153,8 @@ class RequestRateManager : public LoadManager {
   /// \param thread_stat The runnning status of the worker thread
   void Request(
       std::shared_ptr<InferContext> context, const uint64_t request_id,
-      const bool delayed, cb::OnCompleteFn callback_func,
+      const bool delayed,
+      nic::InferenceServerClient::OnCompleteFn callback_func,
       std::shared_ptr<std::map<std::string, AsyncRequestProperties>>
           async_req_map,
       std::shared_ptr<ThreadStat> thread_stat);
@@ -167,5 +167,3 @@ class RequestRateManager : public LoadManager {
   std::chrono::steady_clock::time_point start_time_;
   bool execute_;
 };
-
-}  // namespace perfanalyzer

@@ -56,12 +56,14 @@ from distutils.dir_util import copy_tree
 #      ORT version,
 #      ORT openvino version
 #     )
-TRITON_VERSION_MAP = {'2.6.0dev': ('20.12dev', '20.10', '1.5.3', '2020.4')}
+TRITON_VERSION_MAP = {
+    '2.5.0': ('20.11', '20.11', '1.5.3', '2020.4')
+}
 
 EXAMPLE_BACKENDS = ['identity', 'square', 'repeat']
-CORE_BACKENDS = ['tensorrt', 'custom', 'ensemble']
+CORE_BACKENDS = ['pytorch', 'tensorrt', 'custom', 'ensemble']
 NONCORE_BACKENDS = [
-    'tensorflow1', 'tensorflow2', 'onnxruntime', 'python', 'dali', 'pytorch'
+    'tensorflow1', 'tensorflow2', 'onnxruntime', 'python', 'dali'
 ]
 FLAGS = None
 
@@ -114,44 +116,15 @@ def untar(targetdir, tarfile):
 
 
 def gitclone(cwd, repo, tag, subdir):
-    # If 'tag' starts with "pull/" then it must be of form
-    # "pull/<pr>/head". We just clone at "main" and then fetch the
-    # reference onto a new branch we name "tritonbuildref".
-    if tag.startswith("pull/"):
-        log_verbose('git clone of repo "{}" at ref "{}"'.format(repo, tag))
-        p = subprocess.Popen([
-            'git', 'clone', '--recursive', '--depth=1', '{}/{}.git'.format(
-                FLAGS.github_organization, repo), subdir
-        ],
-                             cwd=cwd)
-        p.wait()
-        fail_if(p.returncode != 0,
-                'git clone of repo "{}" at branch "main" failed'.format(repo))
-
-        log_verbose('git fetch of ref "{}"'.format(tag))
-        p = subprocess.Popen(
-            ['git', 'fetch', 'origin', '{}:tritonbuildref'.format(tag)],
-            cwd=os.path.join(cwd, subdir))
-        p.wait()
-        fail_if(p.returncode != 0, 'git fetch of ref "{}" failed'.format(tag))
-
-        log_verbose('git checkout of tritonbuildref')
-        p = subprocess.Popen(['git', 'checkout', 'tritonbuildref'],
-                             cwd=os.path.join(cwd, subdir))
-        p.wait()
-        fail_if(p.returncode != 0,
-                'git checkout of branch "tritonbuildref" failed')
-
-    else:
-        log_verbose('git clone of repo "{}" at tag "{}"'.format(repo, tag))
-        p = subprocess.Popen([
-            'git', 'clone', '--recursive', '--single-branch', '--depth=1', '-b',
-            tag, '{}/{}.git'.format(FLAGS.github_organization, repo), subdir
-        ],
-                             cwd=cwd)
-        p.wait()
-        fail_if(p.returncode != 0,
-                'git clone of repo "{}" at tag "{}" failed'.format(repo, tag))
+    log_verbose('git clone of repo "{}" at tag "{}"'.format(repo, tag))
+    p = subprocess.Popen([
+        'git', 'clone', '--recursive', '--single-branch', '--depth=1', '-b',
+        tag, '{}/{}.git'.format(FLAGS.github_organization, repo), subdir
+    ],
+                         cwd=cwd)
+    p.wait()
+    fail_if(p.returncode != 0,
+            'git clone of repo "{}" at tag "{}" failed'.format(repo, tag))
 
 
 def prebuild_command():
@@ -218,8 +191,6 @@ def core_cmake_args(components, backends, install_dir):
         cmake_enable('gcs' in FLAGS.filesystem)))
     cargs.append('-DTRITON_ENABLE_S3:BOOL={}'.format(
         cmake_enable('s3' in FLAGS.filesystem)))
-    cargs.append('-DTRITON_ENABLE_AZURE_STORAGE:BOOL={}'.format(
-        cmake_enable('azure_storage' in FLAGS.filesystem)))
 
     cargs.append('-DTRITON_ENABLE_TENSORFLOW={}'.format(
         cmake_enable(('tensorflow1' in backends) or
@@ -230,7 +201,9 @@ def core_cmake_args(components, backends, install_dir):
             cargs.append('-DTRITON_ENABLE_{}={}'.format(
                 be.upper(), cmake_enable(be in backends)))
         if (be in CORE_BACKENDS) and (be in backends):
-            if be == 'tensorrt':
+            if be == 'pytorch':
+                cargs += pytorch_cmake_args()
+            elif be == 'tensorrt':
                 pass
             elif be == 'custom':
                 pass
@@ -239,7 +212,9 @@ def core_cmake_args(components, backends, install_dir):
             else:
                 fail('unknown core backend {}'.format(be))
 
-    cargs.append('-DTRITON_EXTRA_LIB_PATHS=/opt/tritonserver/lib')
+    cargs.append(
+        '-DTRITON_EXTRA_LIB_PATHS=/opt/tritonserver/lib;/opt/tritonserver/lib/pytorch'
+    )
     # cargs.append('/workspace/build')
     cargs.append(f'{os.path.dirname(__file__)}/build')
     return cargs
@@ -262,8 +237,6 @@ def backend_cmake_args(images, components, be, install_dir):
         args = []
     elif be == 'dali':
         args = dali_cmake_args()
-    elif be == 'pytorch':
-        args = pytorch_cmake_args()
     elif be in EXAMPLE_BACKENDS:
         args = []
     else:
@@ -287,7 +260,6 @@ def backend_cmake_args(images, components, be, install_dir):
 def pytorch_cmake_args():
     return [
         '-DTRITON_PYTORCH_INCLUDE_PATHS=/opt/tritonserver/include/torch;/opt/tritonserver/include/torch/torch/csrc/api/include;/opt/tritonserver/include/torchvision;/usr/include/python3.6',
-        '-DTRITON_PYTORCH_LIB_PATHS=/opt/tritonserver/backends/pytorch'
     ]
 
 
@@ -361,7 +333,7 @@ RUN (conda uninstall -y pytorch || true) && \
     pip uninstall -y torch
 RUN cd pytorch && \
     python setup.py clean && \
-    TORCH_CUDA_ARCH_LIST="5.2 6.0 6.1 7.0 7.5 8.0+PTX" \
+    TORCH_CUDA_ARCH_LIST="5.2 6.0 6.1 7.0 7.5 8.0 8.6+PTX" \
     CUDA_HOME="/usr/local/cuda" \
     CMAKE_PREFIX_PATH="$(dirname $(which conda))/../" \
     USE_DISTRIBUTED=OFF USE_OPENMP=OFF USE_NCCL=OFF USE_SYSTEM_NCCL=OFF \
@@ -386,7 +358,7 @@ WORKDIR /workspace
 ENV PATH /usr/local/nvidia/bin:/usr/local/cuda/bin:/workspace/cmake-3.14.3-Linux-x86_64/bin:/opt/miniconda/bin:$PATH
 ENV LD_LIBRARY_PATH /opt/miniconda/lib:/usr/lib:/usr/lib/x86_64-linux-gnu:$LD_LIBRARY_PATH
 
-# The Onnx Runtime dockerfile is the collection of steps in 
+# The Onnx Runtime dockerfile is the collection of steps in
 # https://github.com/microsoft/onnxruntime/tree/v1.5.1/dockerfiles
 
 # Install common dependencies
@@ -415,7 +387,7 @@ ENV LANG en_US.UTF-8
 RUN wget https://apt.repos.intel.com/openvino/2020/GPG-PUB-KEY-INTEL-OPENVINO-2020 && \
     apt-key add GPG-PUB-KEY-INTEL-OPENVINO-2020 && rm GPG-PUB-KEY-INTEL-OPENVINO-2020 && \
     cd /etc/apt/sources.list.d && \
-    echo "deb https://apt.repos.intel.com/openvino/2020 all main">intel-openvino-2020.list && \ 
+    echo "deb https://apt.repos.intel.com/openvino/2020 all main">intel-openvino-2020.list && \
     apt update && \
     apt -y install intel-openvino-dev-ubuntu18-${ONNX_RUNTIME_OPENVINO_VERSION}.287
 # Text replacement to skip installing CMake via distribution
@@ -479,7 +451,6 @@ ARG TRITON_CONTAINER_VERSION
 # libcurl4-openSSL-dev is needed for GCS
 # python3-dev is needed by Torchvision
 # python3-pip is needed by python backend
-# uuid-dev and pkg-config is needed for Azure Storage
 RUN apt-get update && \
     apt-get install -y --no-install-recommends \
             autoconf \
@@ -501,9 +472,7 @@ RUN apt-get update && \
             software-properties-common \
             unzip \
             wget \
-            zlib1g-dev \
-            pkg-config \
-            uuid-dev && \       
+            zlib1g-dev && \
     rm -rf /var/lib/apt/lists/*
 
 # grpcio-tools grpcio-channelz are needed by python backend
@@ -524,32 +493,28 @@ RUN wget -O - https://apt.kitware.com/keys/kitware-archive-latest.asc 2>/dev/nul
 # LibTorch and Torchvision headers and libraries
 COPY --from=tritonserver_pytorch \
      /opt/conda/lib/python3.6/site-packages/torch/lib/libc10.so \
-     /opt/tritonserver/backends/pytorch/
+     /opt/tritonserver/lib/pytorch/
 COPY --from=tritonserver_pytorch \
      /opt/conda/lib/python3.6/site-packages/torch/lib/libc10_cuda.so \
-     /opt/tritonserver/backends/pytorch/
-COPY --from=tritonserver_pytorch /opt/conda/lib/libmkl_core.so /opt/tritonserver/backends/pytorch/
-COPY --from=tritonserver_pytorch /opt/conda/lib/libmkl_gnu_thread.so /opt/tritonserver/backends/pytorch/
-COPY --from=tritonserver_pytorch /opt/conda/lib/libmkl_intel_lp64.so /opt/tritonserver/backends/pytorch/
-COPY --from=tritonserver_pytorch /opt/conda/lib/libmkl_intel_thread.so /opt/tritonserver/backends/pytorch/
-COPY --from=tritonserver_pytorch /opt/conda/lib/libmkl_def.so /opt/tritonserver/backends/pytorch/
-COPY --from=tritonserver_pytorch /opt/conda/lib/libmkl_avx2.so /opt/tritonserver/backends/pytorch/
-COPY --from=tritonserver_pytorch /opt/conda/lib/libiomp5.so /opt/tritonserver/backends/pytorch/
+     /opt/tritonserver/lib/pytorch/
+COPY --from=tritonserver_pytorch /opt/conda/lib/libmkl_core.so /opt/tritonserver/lib/pytorch/
+COPY --from=tritonserver_pytorch /opt/conda/lib/libmkl_gnu_thread.so /opt/tritonserver/lib/pytorch/
+COPY --from=tritonserver_pytorch /opt/conda/lib/libmkl_intel_lp64.so /opt/tritonserver/lib/pytorch/
 COPY --from=tritonserver_pytorch /opt/conda/lib/python3.6/site-packages/torch/include \
      /opt/tritonserver/include/torch
 COPY --from=tritonserver_pytorch /opt/conda/lib/python3.6/site-packages/torch/lib/libtorch.so \
-      /opt/tritonserver/backends/pytorch/
+      /opt/tritonserver/lib/pytorch/
 COPY --from=tritonserver_pytorch /opt/conda/lib/python3.6/site-packages/torch/lib/libtorch_cpu.so \
-      /opt/tritonserver/backends/pytorch/
+      /opt/tritonserver/lib/pytorch/
 COPY --from=tritonserver_pytorch /opt/conda/lib/python3.6/site-packages/torch/lib/libtorch_cuda.so \
-      /opt/tritonserver/backends/pytorch/
+      /opt/tritonserver/lib/pytorch/
 COPY --from=tritonserver_pytorch /opt/pytorch/vision/torchvision/csrc \
     /opt/tritonserver/include/torchvision/torchvision/
 COPY --from=tritonserver_pytorch /opt/pytorch/vision/build/libtorchvision.so \
-    /opt/tritonserver/backends/pytorch/
+    /opt/tritonserver/lib/pytorch/
 COPY --from=tritonserver_pytorch /opt/pytorch/pytorch/LICENSE \
-    /opt/tritonserver/backends/pytorch/
-RUN cd /opt/tritonserver/backends/pytorch && \
+    /opt/tritonserver/lib/pytorch/
+RUN cd /opt/tritonserver/lib/pytorch && \
     for i in `find . -mindepth 1 -maxdepth 1 -type f -name '*\.so*'`; do \
         patchelf --set-rpath '$ORIGIN' $i; \
     done
@@ -682,6 +647,12 @@ LABEL com.nvidia.tritonserver.version="${{TRITON_SERVER_VERSION}}"
 ENV PATH /opt/tritonserver/bin:${{PATH}}
 '''.format(argmap['TRITON_VERSION'], argmap['TRITON_CONTAINER_VERSION'],
            argmap['BASE_IMAGE'])
+    if 'pytorch' in backends:
+        df += '''
+# Need to include pytorch in LD_LIBRARY_PATH since Torchvision loads custom
+# ops from that path
+ENV LD_LIBRARY_PATH /opt/tritonserver/lib/pytorch/:$LD_LIBRARY_PATH
+'''
     df += '''
 ENV TF_ADJUST_HUE_FUSED         1
 ENV TF_ADJUST_SATURATION_FUSED  1
@@ -725,7 +696,7 @@ COPY --chown=1000:1000 --from=tritonserver_build /tmp/tritonbuild/install/lib/li
 '''
     if 'pytorch' in backends:
         df += '''
-COPY --chown=1000:1000 --from=tritonserver_build /opt/tritonserver/backends/pytorch/* backends/pytorch/
+COPY --chown=1000:1000 --from=tritonserver_build /opt/tritonserver/lib/pytorch lib/pytorch
 '''
     if 'onnxruntime' in backends:
         df += '''
@@ -748,19 +719,20 @@ RUN export ONNX_VERSION=`cat backends/onnxruntime/ort_onnx_version.txt`
 '''
     df += '''
 # Extra defensive wiring for CUDA Compat lib
-RUN ln -sf ${{_CUDA_COMPAT_PATH}}/lib.real ${{_CUDA_COMPAT_PATH}}/lib \
- && echo ${{_CUDA_COMPAT_PATH}}/lib > /etc/ld.so.conf.d/00-cuda-compat.conf \
+RUN ln -sf ${_CUDA_COMPAT_PATH}/lib.real ${_CUDA_COMPAT_PATH}/lib \
+ && echo ${_CUDA_COMPAT_PATH}/lib > /etc/ld.so.conf.d/00-cuda-compat.conf \
  && ldconfig \
- && rm -f ${{_CUDA_COMPAT_PATH}}/lib
+ && rm -f ${_CUDA_COMPAT_PATH}/lib
 
 COPY --chown=1000:1000 nvidia_entrypoint.sh /opt/tritonserver
 ENTRYPOINT ["/opt/tritonserver/nvidia_entrypoint.sh"]
 
-ENV NVIDIA_BUILD_ID {}
-LABEL com.nvidia.build.id={}
-LABEL com.nvidia.build.ref={}
-'''.format(argmap['NVIDIA_BUILD_ID'], argmap['NVIDIA_BUILD_ID'],
-           argmap['NVIDIA_BUILD_REF'])
+ARG NVIDIA_BUILD_ID
+ENV NVIDIA_BUILD_ID ${NVIDIA_BUILD_ID:-<unknown>}
+LABEL com.nvidia.build.id="${NVIDIA_BUILD_ID}"
+ARG NVIDIA_BUILD_REF
+LABEL com.nvidia.build.ref="${NVIDIA_BUILD_REF}"
+'''
 
     mkdir(ddir)
     with open(os.path.join(ddir, dockerfile_name), "w") as dfile:
@@ -783,16 +755,9 @@ def container_build(backends, images):
             FLAGS.upstream_container_version)
 
     dockerfileargmap = {
-        'NVIDIA_BUILD_REF':
-            '' if FLAGS.build_sha is None else FLAGS.build_sha,
-        'NVIDIA_BUILD_ID':
-            '<unknown>' if FLAGS.build_id is None else FLAGS.build_id,
-        'TRITON_VERSION':
-            FLAGS.version,
-        'TRITON_CONTAINER_VERSION':
-            FLAGS.container_version,
-        'BASE_IMAGE':
-            base_image,
+        'TRITON_VERSION': FLAGS.version,
+        'TRITON_CONTAINER_VERSION': FLAGS.container_version,
+        'BASE_IMAGE': base_image,
     }
 
     # If building the pytorch backend then need to include pytorch in
@@ -1007,14 +972,6 @@ if __name__ == '__main__':
                         required=False,
                         help='Do not use Docker container for build.')
 
-    parser.add_argument('--build-id',
-                        type=str,
-                        required=False,
-                        help='Build ID associated with the build.')
-    parser.add_argument('--build-sha',
-                        type=str,
-                        required=False,
-                        help='SHA associated with the build.')
     parser.add_argument(
         '--build-dir',
         type=str,
@@ -1134,7 +1091,7 @@ if __name__ == '__main__':
         action='append',
         required=False,
         help=
-        'Include specified filesystem in build. Allowed values are "gcs", "azure_storage" and "s3".'
+        'Include specified filesystem in build. Allowed values are "gcs" and "s3".'
     )
     parser.add_argument(
         '-b',
@@ -1142,7 +1099,7 @@ if __name__ == '__main__':
         action='append',
         required=False,
         help=
-        'Include specified backend in build as <backend-name>[:<repo-tag>]. If <repo-tag> starts with "pull/" then it refers to a pull-request reference, otherwise <repo-tag> indicates the git tag/branch to use for the build, default is "main".'
+        'Include specified backend in build as <backend-name>[:<repo-tag>]. <repo-tag> indicates the git tag/branch to use for the build, default is "main".'
     )
     parser.add_argument(
         '-r',
@@ -1150,7 +1107,7 @@ if __name__ == '__main__':
         action='append',
         required=False,
         help=
-        'The version of a component to use in the build as <component-name>:<repo-tag>. <component-name> can be "common", "core", or "backend". If <repo-tag> starts with "pull/" then it refers to a pull-request reference, otherwise <repo-tag> indicates the git tag/branch. Default is "main".'
+        'The git tag/branch to use for a component of the build as <component-name>:<repo-tag>. <component-name> can be "common", "core", or "backend".'
     )
 
     FLAGS = parser.parse_args()

@@ -41,4 +41,3 @@ optimization {
     enable: true
   }
 }
-backend: "pytorch"

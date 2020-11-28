@@ -131,7 +131,7 @@ Use docker pull to get the client libraries and examples container
 from NGC.
 
 ```bash
-$ docker pull nvcr.io/nvidia/tritonserver:<xx.yy>-py3-sdk
+$ docker pull nvcr.io/nvidia/tritonserver:<xx.yy>-py3-clientsdk
 ```
 
 Where <xx.yy> is the version that you want to pull. Within the
@@ -150,14 +150,14 @@ under-development version). The branch you use for the client build
 should match the version of Triton you are using.
 
 ```bash
-$ git checkout r20.10
+$ git checkout r20.11
 ```
 
 Then, issue the following command to build the C++ client library and
 the Python wheel files for the Python client library.
 
 ```bash
-$ docker build -t tritonserver_sdk -f Dockerfile.sdk .
+$ docker build -t tritonserver_client -f Dockerfile.client .
 ```
 
 You can optionally add *--build-arg "BASE_IMAGE=<base_image>"* to set
@@ -166,7 +166,7 @@ base image must be an Ubuntu CUDA image to be able to build CUDA
 shared memory support. If CUDA shared memory support is not required,
 you can use Ubuntu 18.04 as the base image.
 
-After the build completes the tritonserver_sdk docker image will
+After the build completes the tritonserver_client docker image will
 contain the built client libraries in /workspace/install/lib, the
 corresponding headers in /workspace/install/include, and the Python
 wheel files in /workspace/install/python. The image will also contain
@@ -178,7 +178,7 @@ the built client examples that you can learn more about in
 The client library build is performed using CMake. *IMPORTANT*
 Note that version 3.18.4 of cmake is needed to compile the
 client. The build dependencies and requirements are shown in
-`Dockerfile.sdk`. To build without Docker you must first
+`Dockerfile.client`. To build without Docker you must first
 install those dependencies along with required cmake version.
 This section describes the client build for Ubuntu 18.04 and
 Windows 10 systems.
@@ -189,13 +189,13 @@ want to build (or the master branch if you want to build the
 under-development version).
 
 ```bash
-$ git checkout r20.10
+$ git checkout r20.11
 ```
 
 #### Ubuntu 18.04
 
 For Ubuntu, the dependencies and how to install them can be found in
-`Dockerfile.sdk`. The appropriate CUDA library must be installed
+`Dockerfile.client`. The appropriate CUDA library must be installed
 if TRITON_ENABLE_GPU=OFF is not specified in the cmake. Follow the
 dockerfile closely till the cmake invocation. Also note that
 the dependency name may be different depending on the version of the
@@ -261,6 +261,7 @@ following cmake configuration.
 
 ```
 > cmake -G"Visual Studio 16 2019" -DTRITON_ENABLE_GPU=OFF -DTRITON_ENABLE_METRICS_GPU=OFF -DCMAKE_BUILD_TYPE=Release -DTRITON_COMMON_REPO_TAG:STRING=<tag> -DTRITON_CORE_REPO_TAG:STRING=<tag>
+
 ```
 
 Where <tag> is "main" if you are building the clients from the master

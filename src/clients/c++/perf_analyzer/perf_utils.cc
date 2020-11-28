@@ -27,70 +27,30 @@
 #include <fcntl.h>
 #include <sys/mman.h>
 #include <unistd.h>
-#include <algorithm>
 #include <iostream>
 #include <string>
 
-#include "src/clients/c++/perf_analyzer/client_backend/client_backend.h"
 #include "src/clients/c++/perf_analyzer/perf_utils.h"
 
-namespace perfanalyzer {
-
-cb::ProtocolType
+ProtocolType
 ParseProtocol(const std::string& str)
 {
   std::string protocol(str);
   std::transform(protocol.begin(), protocol.end(), protocol.begin(), ::tolower);
   if (protocol == "http") {
-    return cb::ProtocolType::HTTP;
+    return ProtocolType::HTTP;
   } else if (protocol == "grpc") {
-    return cb::ProtocolType::GRPC;
+    return ProtocolType::GRPC;
   }
-  return cb::ProtocolType::UNKNOWN;
+  return ProtocolType::UNKNOWN;
 }
 
-cb::Error
-ConvertDTypeFromTFS(const std::string& tf_dtype, std::string* datatype)
-{
-  if (tf_dtype == "DT_HALF") {
-    *datatype = "FP16";
-  } else if (tf_dtype == "DT_FLOAT") {
-    *datatype = "FP32";
-  } else if (tf_dtype == "DT_DOUBLE") {
-    *datatype = "FP64";
-  } else if (tf_dtype == "DT_INT32") {
-    *datatype = "INT32";
-  } else if (tf_dtype == "DT_INT16") {
-    *datatype = "INT16";
-  } else if (tf_dtype == "DT_UINT16") {
-    *datatype = "UINT16";
-  } else if (tf_dtype == "DT_INT8") {
-    *datatype = "INT8";
-  } else if (tf_dtype == "DT_UNIT8") {
-    *datatype = "UINT8";
-  } else if (tf_dtype == "DT_STRING") {
-    *datatype = "BYTES";
-  } else if (tf_dtype == "DT_INT64") {
-    *datatype = "INT64";
-  } else if (tf_dtype == "DT_BOOL") {
-    *datatype = "BOOL";
-  } else if (tf_dtype == "DT_UINT32") {
-    *datatype = "UINT32";
-  } else if (tf_dtype == "DT_UINT64") {
-    *datatype = "UINT64";
-  } else {
-    return cb::Error("unsupported datatype encountered " + tf_dtype);
-  }
-
-  return cb::Error::Success;
-}
-
-cb::Error
+nic::Error
 ReadFile(const std::string& path, std::vector<char>* contents)
 {
   std::ifstream in(path, std::ios::in | std::ios::binary);
   if (!in) {
-    return cb::Error("failed to open file '" + path + "'");
+    return nic::Error("failed to open file '" + path + "'");
   }
 
   in.seekg(0, std::ios::end);
@@ -106,20 +66,20 @@ ReadFile(const std::string& path, std::vector<char>* contents)
 
   // If size is invalid, report after ifstream is closed
   if (file_size < 0) {
-    return cb::Error("failed to get size for file '" + path + "'");
+    return nic::Error("failed to get size for file '" + path + "'");
   } else if (file_size == 0) {
-    return cb::Error("file '" + path + "' is empty");
+    return nic::Error("file '" + path + "' is empty");
   }
 
-  return cb::Error::Success;
+  return nic::Error::Success;
 }
 
-cb::Error
+nic::Error
 ReadTextFile(const std::string& path, std::vector<std::string>* contents)
 {
   std::ifstream in(path);
   if (!in) {
-    return cb::Error("failed to open file '" + path + "'");
+    return nic::Error("failed to open file '" + path + "'");
   }
 
   std::string current_string;
@@ -129,18 +89,18 @@ ReadTextFile(const std::string& path, std::vector<std::string>* contents)
   in.close();
 
   if (contents->size() == 0) {
-    return cb::Error("file '" + path + "' is empty");
+    return nic::Error("file '" + path + "' is empty");
   }
-  return cb::Error::Success;
+  return nic::Error::Success;
 }
 
-cb::Error
+nic::Error
 ReadTimeIntervalsFile(
     const std::string& path, std::vector<std::chrono::nanoseconds>* contents)
 {
   std::ifstream in(path);
   if (!in) {
-    return cb::Error("failed to open file '" + path + "'");
+    return nic::Error("failed to open file '" + path + "'");
   }
 
   std::string current_string;
@@ -152,9 +112,9 @@ ReadTimeIntervalsFile(
   in.close();
 
   if (contents->size() == 0) {
-    return cb::Error("file '" + path + "' is empty");
+    return nic::Error("file '" + path + "' is empty");
   }
-  return cb::Error::Success;
+  return nic::Error::Success;
 }
 
 bool
@@ -229,6 +189,7 @@ ElementCount(const std::vector<int64_t>& shape)
   return count;
 }
 
+
 void
 SerializeStringTensor(
     std::vector<std::string> string_tensor, std::vector<char>* serialized_data)
@@ -245,7 +206,8 @@ SerializeStringTensor(
       std::back_inserter(*serialized_data));
 }
 
-cb::Error
+
+nic::Error
 SerializeExplicitTensor(
     const rapidjson::Value& tensor, const std::string& dt,
     std::vector<char>* decoded_data)
@@ -254,7 +216,7 @@ SerializeExplicitTensor(
     std::string serialized = "";
     for (const auto& value : tensor.GetArray()) {
       if (!value.IsString()) {
-        return cb::Error("unable to find string data in json");
+        return nic::Error("unable to find string data in json");
       }
       std::string element(value.GetString());
       uint32_t len = element.size();
@@ -268,80 +230,80 @@ SerializeExplicitTensor(
     for (const auto& value : tensor.GetArray()) {
       if (dt.compare("BOOL") == 0) {
         if (!value.IsBool()) {
-          return cb::Error("unable to find bool data in json");
+          return nic::Error("unable to find bool data in json");
         }
         bool element(value.GetBool());
         const char* src = reinterpret_cast<const char*>(&element);
         decoded_data->insert(decoded_data->end(), src, src + sizeof(bool));
       } else if (dt.compare("UINT8") == 0) {
         if (!value.IsUint()) {
-          return cb::Error("unable to find uint8_t data in json");
+          return nic::Error("unable to find uint8_t data in json");
         }
         uint8_t element(static_cast<uint8_t>(value.GetUint()));
         const char* src = reinterpret_cast<const char*>(&element);
         decoded_data->insert(decoded_data->end(), src, src + sizeof(uint8_t));
       } else if (dt.compare("INT8") == 0) {
         if (!value.IsInt()) {
-          return cb::Error("unable to find int8_t data in json");
+          return nic::Error("unable to find int8_t data in json");
         }
         int8_t element(static_cast<int8_t>(value.GetInt()));
         const char* src = reinterpret_cast<const char*>(&element);
         decoded_data->insert(decoded_data->end(), src, src + sizeof(int8_t));
       } else if (dt.compare("UINT16") == 0) {
         if (!value.IsUint()) {
-          return cb::Error("unable to find uint16_t data in json");
+          return nic::Error("unable to find uint16_t data in json");
         }
         uint16_t element(static_cast<uint16_t>(value.GetUint()));
         const char* src = reinterpret_cast<const char*>(&element);
         decoded_data->insert(decoded_data->end(), src, src + sizeof(uint16_t));
       } else if (dt.compare("INT16") == 0) {
         if (!value.IsInt()) {
-          return cb::Error("unable to find int16_t data in json");
+          return nic::Error("unable to find int16_t data in json");
         }
         int16_t element(static_cast<int16_t>(value.GetInt()));
         const char* src = reinterpret_cast<const char*>(&element);
         decoded_data->insert(decoded_data->end(), src, src + sizeof(int16_t));
       } else if (dt.compare("FP16") == 0) {
-        return cb::Error(
+        return nic::Error(
             "Can not use explicit tensor description for fp16 datatype");
       } else if (dt.compare("UINT32") == 0) {
         if (!value.IsUint()) {
-          return cb::Error("unable to find uint32_t data in json");
+          return nic::Error("unable to find uint32_t data in json");
         }
         uint32_t element(value.GetUint());
         const char* src = reinterpret_cast<const char*>(&element);
         decoded_data->insert(decoded_data->end(), src, src + sizeof(uint32_t));
       } else if (dt.compare("INT32") == 0) {
         if (!value.IsInt()) {
-          return cb::Error("unable to find int32_t data in json");
+          return nic::Error("unable to find int32_t data in json");
         }
         int32_t element(value.GetInt());
         const char* src = reinterpret_cast<const char*>(&element);
         decoded_data->insert(decoded_data->end(), src, src + sizeof(int32_t));
       } else if (dt.compare("FP32") == 0) {
         if (!value.IsDouble()) {
-          return cb::Error("unable to find float data in json");
+          return nic::Error("unable to find float data in json");
         }
         float element(value.GetFloat());
         const char* src = reinterpret_cast<const char*>(&element);
         decoded_data->insert(decoded_data->end(), src, src + sizeof(float));
       } else if (dt.compare("UINT64") == 0) {
         if (!value.IsUint64()) {
-          return cb::Error("unable to find uint64_t data in json");
+          return nic::Error("unable to find uint64_t data in json");
         }
         uint64_t element(value.GetUint64());
         const char* src = reinterpret_cast<const char*>(&element);
         decoded_data->insert(decoded_data->end(), src, src + sizeof(uint64_t));
       } else if (dt.compare("INT64") == 0) {
         if (!value.IsInt64()) {
-          return cb::Error("unable to find int64_t data in json");
+          return nic::Error("unable to find int64_t data in json");
         }
         int64_t element(value.GetInt64());
         const char* src = reinterpret_cast<const char*>(&element);
         decoded_data->insert(decoded_data->end(), src, src + sizeof(int64_t));
       } else if (dt.compare("FP64") == 0) {
         if (!value.IsDouble()) {
-          return cb::Error("unable to find fp64 data in json");
+          return nic::Error("unable to find fp64 data in json");
         }
         double element(value.GetDouble());
         const char* src = reinterpret_cast<const char*>(&element);
@@ -349,7 +311,7 @@ SerializeExplicitTensor(
       }
     }
   }
-  return cb::Error::Success;
+  return nic::Error::Success;
 }
 
 std::string
@@ -402,6 +364,7 @@ ShapeTensorValuesToString(const int* data_ptr, const int count)
   return str;
 }
 
+
 template <>
 std::function<std::chrono::nanoseconds(std::mt19937&)>
 ScheduleDistribution<Distribution::POISSON>(const double request_rate)
@@ -423,5 +386,3 @@ ScheduleDistribution<Distribution::CONSTANT>(const double request_rate)
           std::chrono::duration<double>(1.0 / request_rate));
   return [period](std::mt19937& /*gen*/) { return period; };
 }
-
-}  // namespace perfanalyzer

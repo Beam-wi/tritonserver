@@ -31,7 +31,6 @@
 #include "src/clients/c++/perf_analyzer/model_parser.h"
 #include "src/clients/c++/perf_analyzer/request_rate_manager.h"
 
-namespace perfanalyzer {
 
 /// Constant parameters that determine the whether stopping criteria has met
 /// for the current phase of testing
@@ -42,6 +41,7 @@ struct LoadParams {
   // The +/- range to account for while assessing load status
   double stability_threshold;
 };
+
 
 /// Data structure to keep track of real-time load status and determine wether
 /// stopping criteria has met for the current phase of testing.
@@ -67,7 +67,7 @@ struct ServerSideStats {
   uint64_t compute_infer_time_ns;
   uint64_t compute_output_time_ns;
 
-  std::map<cb::ModelIdentifier, ServerSideStats> composing_models_stat;
+  std::map<ModelIdentifier, ServerSideStats> composing_models_stat;
 };
 
 /// Holds the statistics recorded at the client side.
@@ -105,6 +105,7 @@ struct PerfStatus {
   // placeholder for the latency value that is used for conditional checking
   uint64_t stabilizing_latency_ns;
 };
+
 
 //==============================================================================
 /// A InferenceProfiler is a helper class that measures and summarizes the
@@ -145,18 +146,18 @@ class InferenceProfiler {
   /// microseconds.
   /// \param parser The ModelParse object which holds all the details about the
   /// model.
-  /// \param profile_backend The ClientBackend object used to communicate
+  /// \param profile_client The TritonClientWrapper object used to communicate
   /// with the server by profiler.
   /// \param manager The LoadManager object that will produce load on the
   /// server.
   /// \param profiler Returns a new InferenceProfiler object.
-  /// \return cb::Error object indicating success or failure.
-  static cb::Error Create(
+  /// \return Error object indicating success or failure.
+  static nic::Error Create(
       const bool verbose, const double stability_threshold,
       const uint64_t measurement_window_ms, const size_t max_trials,
       const int64_t percentile, const uint64_t latency_threshold_ms,
-      const cb::ProtocolType protocol, std::shared_ptr<ModelParser>& parser,
-      std::unique_ptr<cb::ClientBackend> profile_backend,
+      const ProtocolType protocol, std::shared_ptr<ModelParser>& parser,
+      std::unique_ptr<TritonClientWrapper> profile_client,
       std::unique_ptr<LoadManager> manager,
       std::unique_ptr<InferenceProfiler>* profiler);
 
@@ -170,13 +171,13 @@ class InferenceProfiler {
   /// \param search_mode The search algorithm to be applied.
   /// \param summary Returns the trace of the measurement along the search
   /// path.
-  /// \return cb::Error object indicating success or failure.
+  /// \return Error object indicating success or failure.
   template <typename T>
-  cb::Error Profile(
+  nic::Error Profile(
       const T start, const T end, const T step, const SearchMode search_mode,
       std::vector<PerfStatus>& summary)
   {
-    cb::Error err;
+    nic::Error err;
     bool meets_threshold;
     if (search_mode == SearchMode::NONE) {
       err = Profile(summary, &meets_threshold);
@@ -218,7 +219,7 @@ class InferenceProfiler {
         }
       }
     }
-    return cb::Error::Success;
+    return nic::Error::Success;
   }
 
   bool IncludeServerStats() { return include_server_stats_; }
@@ -228,9 +229,9 @@ class InferenceProfiler {
       const bool verbose, const double stability_threshold,
       const int32_t measurement_window_ms, const size_t max_trials,
       const bool extra_percentile, const size_t percentile,
-      const uint64_t latency_threshold_ms, const cb::ProtocolType protocol,
+      const uint64_t latency_threshold_ms, const ProtocolType protocol,
       std::shared_ptr<ModelParser>& parser,
-      std::unique_ptr<cb::ClientBackend> profile_backend,
+      std::unique_ptr<TritonClientWrapper> profile_client,
       std::unique_ptr<LoadManager> manager);
 
   /// Actively measure throughput in every 'measurement_window' msec until the
@@ -244,8 +245,8 @@ class InferenceProfiler {
   /// \param concurrent_request_count The concurrency level for the measurement.
   /// \param summary Appends the measurements summary at the end of this list.
   /// \param meets_threshold Returns whether the setting meets the threshold.
-  /// \return cb::Error object indicating success or failure.
-  cb::Error Profile(
+  /// \return Error object indicating success or failure.
+  nic::Error Profile(
       const size_t concurrent_request_count, std::vector<PerfStatus>& summary,
       bool* meets_threshold);
 
@@ -254,8 +255,8 @@ class InferenceProfiler {
   /// \param request_rate The request rate for inferences.
   /// \param summary Appends the measurements summary at the end of this list.
   /// \param meets_threshold Returns whether the setting meets the threshold.
-  /// \return cb::Error object indicating success or failure.
-  cb::Error Profile(
+  /// \return Error object indicating success or failure.
+  nic::Error Profile(
       const double request_rate, std::vector<PerfStatus>& summary,
       bool* meets_threshold);
 
@@ -264,32 +265,32 @@ class InferenceProfiler {
   /// a file specifying the time intervals.
   /// \param summary Appends the measurements summary at the end of this list.
   /// \param meets_threshold Returns whether the measurement met the threshold.
-  /// \return cb::Error object indicating success
+  /// \return Error object indicating success
   /// or failure.
-  cb::Error Profile(std::vector<PerfStatus>& summary, bool* meets_threshold);
+  nic::Error Profile(std::vector<PerfStatus>& summary, bool* meets_threshold);
 
   /// A helper function for profiling functions.
   /// \param clean_starts Whether or not to reset load cycle with every
   /// measurement trials.
   /// \param status_summary Returns the summary of the measurement.
   /// \param is_stable Returns whether the measurement stabilized or not.
-  /// \return cb::Error object indicating success or failure.
-  cb::Error ProfileHelper(
+  /// \return Error object indicating success or failure.
+  nic::Error ProfileHelper(
       const bool clean_starts, PerfStatus& status_summary, bool* is_stable);
 
   /// Helper function to perform measurement.
   /// \param status_summary The summary of this measurement.
-  /// \return cb::Error object indicating success or failure.
-  cb::Error Measure(PerfStatus& status_summary);
+  /// \return Error object indicating success or failure.
+  nic::Error Measure(PerfStatus& status_summary);
 
   /// Gets the server side statistics
   /// \param model_status Returns the status of the models provided by
   /// the server. If the model being profiled is non-ensemble model,
   /// only its status will be returned. Otherwise, the status of the composing
   /// models will also be returned.
-  /// \return cb::Error object indicating success or failure.
-  cb::Error GetServerSideStatus(
-      std::map<cb::ModelIdentifier, cb::ModelStatistics>* model_status);
+  /// \return Error object indicating success or failure.
+  nic::Error GetServerSideStatus(
+      std::map<ModelIdentifier, ModelStatistics>* model_status);
 
   /// Sumarize the measurement with the provided statistics.
   /// \param timestamps The timestamps of the requests completed during the
@@ -299,12 +300,12 @@ class InferenceProfiler {
   /// \param start_stat The accumulated context status at the start.
   /// \param end_stat The accumulated context status at the end.
   /// \param summary Returns the summary of the measurement.
-  /// \return cb::Error object indicating success or failure.
-  cb::Error Summarize(
+  /// \return Error object indicating success or failure.
+  nic::Error Summarize(
       const TimestampVector& timestamps,
-      const std::map<cb::ModelIdentifier, cb::ModelStatistics>& start_status,
-      const std::map<cb::ModelIdentifier, cb::ModelStatistics>& end_status,
-      const cb::InferStat& start_stat, const cb::InferStat& end_stat,
+      const std::map<ModelIdentifier, ModelStatistics>& start_status,
+      const std::map<ModelIdentifier, ModelStatistics>& end_status,
+      const nic::InferStat& start_stat, const nic::InferStat& end_stat,
       PerfStatus& summary);
 
   /// A helper function to get the start and end of a measurement window.
@@ -331,8 +332,8 @@ class InferenceProfiler {
   /// \param latencies The vector of request latencies collected.
   /// \param summary Returns the summary that the latency related fields are
   /// set.
-  /// \return cb::Error object indicating success or failure.
-  cb::Error SummarizeLatency(
+  /// \return Error object indicating success or failure.
+  nic::Error SummarizeLatency(
       const std::vector<uint64_t>& latencies, PerfStatus& summary);
 
   /// \param start_stat The accumulated client statistics at the start.
@@ -344,9 +345,9 @@ class InferenceProfiler {
   /// schedule.
   /// \param summary Returns the summary that the fields recorded by
   /// client are set.
-  /// \return cb::Error object indicating success or failure.
-  cb::Error SummarizeClientStat(
-      const cb::InferStat& start_stat, const cb::InferStat& end_stat,
+  /// \return Error object indicating success or failure.
+  nic::Error SummarizeClientStat(
+      const nic::InferStat& start_stat, const nic::InferStat& end_stat,
       const uint64_t duration_ns, const size_t valid_request_count,
       const size_t delayed_request_count, const size_t valid_sequence_count,
       PerfStatus& summary);
@@ -357,11 +358,11 @@ class InferenceProfiler {
   /// \param end_status The model status at the end of the measurement.
   /// \param server_stats Returns the summary that the fields recorded by server
   /// are set.
-  /// \return cb::Error object indicating success or failure.
-  cb::Error SummarizeServerStatsHelper(
-      const cb::ModelIdentifier& model_identifier,
-      const std::map<cb::ModelIdentifier, cb::ModelStatistics>& start_status,
-      const std::map<cb::ModelIdentifier, cb::ModelStatistics>& end_status,
+  /// \return Error object indicating success or failure.
+  nic::Error SummarizeServerStatsHelper(
+      const ModelIdentifier& model_identifier,
+      const std::map<ModelIdentifier, ModelStatistics>& start_status,
+      const std::map<ModelIdentifier, ModelStatistics>& end_status,
       ServerSideStats* server_stats);
 
   /// \param model_identifier A pair of model_name and model_version to identify
@@ -370,21 +371,22 @@ class InferenceProfiler {
   /// \param end_status The model status at the end of the measurement.
   /// \param server_stats Returns the summary that the fields recorded by server
   /// are set.
-  /// \return cb::Error object indicating success or failure.
-  cb::Error SummarizeServerStats(
-      const cb::ModelIdentifier& model_identifier,
-      const std::map<cb::ModelIdentifier, cb::ModelStatistics>& start_status,
-      const std::map<cb::ModelIdentifier, cb::ModelStatistics>& end_status,
+  /// \return Error object indicating success or failure.
+  nic::Error SummarizeServerStats(
+      const ModelIdentifier& model_identifier,
+      const std::map<ModelIdentifier, ModelStatistics>& start_status,
+      const std::map<ModelIdentifier, ModelStatistics>& end_status,
       ServerSideStats* server_stats);
+
 
   /// \param start_status The model status at the start of the measurement.
   /// \param end_status The model status at the end of the measurement.
   /// \param server_stats Returns the summary that the fields recorded by server
   /// are set.
-  /// \return cb::Error object indicating success or failure.
-  cb::Error SummarizeServerStats(
-      const std::map<cb::ModelIdentifier, cb::ModelStatistics>& start_status,
-      const std::map<cb::ModelIdentifier, cb::ModelStatistics>& end_status,
+  /// \return Error object indicating success or failure.
+  nic::Error SummarizeServerStats(
+      const std::map<ModelIdentifier, ModelStatistics>& start_status,
+      const std::map<ModelIdentifier, ModelStatistics>& end_status,
       ServerSideStats* server_stats);
 
   bool verbose_;
@@ -394,17 +396,15 @@ class InferenceProfiler {
   size_t percentile_;
   uint64_t latency_threshold_ms_;
 
-  cb::ProtocolType protocol_;
+  ProtocolType protocol_;
   std::string model_name_;
   int64_t model_version_;
 
   std::shared_ptr<ModelParser> parser_;
-  std::unique_ptr<cb::ClientBackend> profile_backend_;
+  std::unique_ptr<TritonClientWrapper> profile_client_;
   std::unique_ptr<LoadManager> manager_;
   LoadParams load_parameters_;
 
   bool include_lib_stats_;
   bool include_server_stats_;
 };
-
-}  // namespace perfanalyzer

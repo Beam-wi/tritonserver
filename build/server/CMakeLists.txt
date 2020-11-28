@@ -31,17 +31,10 @@ if(NOT CMAKE_BUILD_TYPE)
   set(CMAKE_BUILD_TYPE Release)
 endif()
 
-if(CMAKE_CXX_COMPILER_ID STREQUAL "MSVC")
-  message("Using MSVC as compiler, default target on Windows 10. "
-		  "If the target system is not Windows 10, please update _WIN32_WINNT "
-		  "to corresponding value.")
-  set(CMAKE_CXX_FLAGS "/W4 /D_WIN32_WINNT=0x0A00 /EHsc")
-  set(CMAKE_WINDOWS_EXPORT_ALL_SYMBOLS TRUE)
-else()
-  set(CMAKE_CXX_FLAGS "-Wall -Wextra -Wno-unused-parameter -Werror -Wno-deprecated-declarations")
-  set(CMAKE_CXX_FLAGS_DEBUG "-g")
-  set(CMAKE_CXX_FLAGS_RELEASE "-O3")
-endif()
+# no-sign-compare needed for pytorch header
+set(CMAKE_CXX_FLAGS "-Wall -Wextra -Werror -Wno-unused-parameter -Wno-deprecated-declarations -Wno-sign-compare")
+set(CMAKE_CXX_FLAGS_DEBUG "-g")
+set(CMAKE_CXX_FLAGS_RELEASE "-O3")
 set(CMAKE_CXX_STANDARD 11)
 set(CMAKE_POSITION_INDEPENDENT_CODE ON)
 
@@ -125,10 +118,6 @@ if(${TRITON_ENABLE_GCS})
   add_definitions(-DTRITON_ENABLE_GCS=1)
 endif() # TRITON_ENABLE_GCS
 
-if(${TRITON_ENABLE_AZURE_STORAGE})
-  add_definitions(-DTRITON_ENABLE_AZURE_STORAGE=1)
-endif() # TRITON_ENABLE_AZURE_STORAGE
-
 if(${TRITON_ENABLE_S3})
   add_definitions(-DTRITON_ENABLE_S3=1)
 endif() # TRITON_ENABLE_S3
@@ -143,9 +132,6 @@ endif() # TRITON_ENABLE_PYTHON
 
 if(${TRITON_ENABLE_TENSORRT})
   add_definitions(-DTRITON_ENABLE_TENSORRT=1)
-  if (NOT "${TRITON_TENSORRT_INCLUDE_PATHS}" STREQUAL "")
-    include_directories("${TRITON_TENSORRT_INCLUDE_PATHS}")
-  endif()
 endif() # TRITON_ENABLE_TENSORRT
 
 if(${TRITON_ENABLE_ONNXRUNTIME})

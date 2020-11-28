@@ -30,12 +30,6 @@
 
 # Triton Inference Server
 
-**LATEST RELEASE: You are currently on the master branch which tracks
-under-development progress towards the next release. The latest
-release of the Triton Inference Server is 2.4.0 and is available on
-branch
-[r20.10](https://github.com/triton-inference-server/server/tree/r20.10).**
-
 Triton Inference Server provides a cloud and edge inferencing solution
 optimized for both CPUs and GPUs. Triton supports an HTTP/REST and
 GRPC protocol that allows remote clients to request inferencing for
@@ -44,11 +38,20 @@ available as a shared library with a C API that allows the full
 functionality of Triton to be included directly in an
 application.
 
-The current release of the Triton Inference Server is 2.4.0 and
-corresponds to the 20.10 release of the tensorrtserver container on
-[NVIDIA GPU Cloud (NGC)](https://ngc.nvidia.com). The branch for this
-release is
-[r20.10](https://github.com/triton-inference-server/server/tree/r20.10).
+## What's New in 2.5.0
+
+* ONNX Runtime backend updated to use ONNX Runtime 1.5.3.
+
+* The PyTorch backend is moved to a dedicated repo 
+  triton-inference-server/pytorch_backend.
+
+* The Caffe2 backend is removed. Caffe2 models are no longer supported.
+
+* Fix handling of failed model reloads. If a model reload fails, the currently 
+  loaded version of the model will remain loaded and its availability will be uninterrupted. 
+
+* Releasing Triton ModelAnalyzer in the Triton SDK container and as a PIP 
+  package available in NVIDIA PyIndex.
 
 ## Features
 
@@ -186,7 +189,7 @@ As part of you deployment strategy you may want to [explicitly manage
 what models are available by loading and unloading
 models](docs/model_management.md) from a running Triton server. If you
 are using Kubernetes for deployment a simple example of how to [deploy
-Triton using Kubernetes and Helm](deploy/single_server/README.md) may
+Triton using Kubernetes and Helm](deploy/single_server/README.rst) may
 be helpful.
 
 The [version 1 to version 2 migration

@@ -30,7 +30,4 @@ add_subdirectory(library)
 if(NOT ${TRITON_CLIENT_SKIP_EXAMPLES})
   add_subdirectory(examples)
   add_subdirectory(perf_analyzer)
-  # FIXME: Control building the client test with a
-  # separate cmake flag.
-  add_subdirectory(tests)
 endif() # TRITON_CLIENT_SKIP_EXAMPLES
