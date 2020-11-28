@@ -210,7 +210,7 @@ def core_cmake_args(components, backends, install_dir):
     )
     # cargs.append('/workspace/build')
     # cargs.append(f'{os.path.dirname(__file__)}/build')
-    cargs.append(f"{os.environ.get('TRITON_SOURCE')}/build")  # os.getenv('TRITON_SOURCE')
+    cargs.append(f"{os.getenv('TRITON_SOURCE')}/build")  # os.environ.get('TRITON_SOURCE')
     return cargs
 
 
