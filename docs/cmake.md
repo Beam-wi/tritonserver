@@ -10,7 +10,7 @@
 Load tar from https://cmake.org/download/ or https://cmake.org/files/.
 
 ```　
-　　$ tar -zxvf 	cmake-3.19.0-rc3.tar.gz
+　　$ tar -zxvf cmake-3.19.0-rc3.tar.gz
 　　$ cd cmake-3.19.0
 　　$ ./configure
 　　$ make
@@ -36,11 +36,11 @@ Load tar cmake-3.19.0-rc3-Linux-x86_64.tar.gz from https://cmake.org/download/ o
 Only add to environment variables.
 
 ```
-    tar -zxvf cmake-3.19.0-rc3-Linux-x86_64.tar.gz
+    $ tar -zxvf cmake-3.19.0-rc3-Linux-x86_64.tar.gz
     
-    vim ~/.bashrc 
+    $ vim ~/.bashrc 
         export PATH=/******/cmake-3.19.0-rc3-Linux-x86_64/bin:$PATH
-    source ~/.bashrc
+    $ source ~/.bashrc
     
 ```
 
