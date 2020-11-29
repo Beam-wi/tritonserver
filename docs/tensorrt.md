@@ -1,14 +1,22 @@
 ### Dependencies
 
-Download deb from https://developer.download.nvidia.cn/compute/machine-learning/repos/ubuntu1804/x86_64/
+Download [deb](https://developer.download.nvidia.cn/compute/machine-learning/repos/ubuntu1804/x86_64/) from https://developer.download.nvidia.cn/compute/machine-learning/repos/ubuntu1804/x86_64/
 
-		libnvinfer7
-		libnvinfer-dev
-		libnvinfer-plugin7
-		libnvinfer-plugin-dev
+    libnvinfer7
+    libnvinfer-dev
+    libnvinfer-plugin7
+    libnvinfer-plugin-dev
+    
+Note: Pay attention to installation sequence.
+	
+* [libnvinfer7_7.1.3-1+cuda10.2_amd64.deb](https://developer.download.nvidia.cn/compute/machine-learning/repos/ubuntu1804/x86_64/libnvinfer7_7.1.3-1+cuda10.2_amd64.deb)
+* [libnvinfer-dev_7.1.3-1+cuda10.2_amd64.deb](https://developer.download.nvidia.cn/compute/machine-learning/repos/ubuntu1804/x86_64/libnvinfer-dev_7.1.3-1+cuda10.2_amd64.deb)
+* [libnvinfer-plugin7_7.1.3-1+cuda10.2_amd64.deb](https://developer.download.nvidia.cn/compute/machine-learning/repos/ubuntu1804/x86_64/libnvinfer-plugin7_7.1.3-1+cuda10.2_amd64.deb)
+* [libnvinfer-plugin7_7.1.3-1+cuda10.2_amd64.deb](https://developer.download.nvidia.cn/compute/machine-learning/repos/ubuntu1804/x86_64/libnvinfer-plugin-dev_7.1.3-1+cuda10.2_amd64.deb)
 		
-Check installed
+Install and check
 
+    $ dpkg -i ~Path/libninfer*.deb
     $ dpkg -L libnvinfer-dev
         /.
         /usr
@@ -16,7 +24,7 @@ Check installed
         /usr/include/x86_64-linux-gnu
         /usr/include/x86_64-linux-gnu/NvInfer.h
         ...
-    $ dpkg 
+    $ dpkg -L libnvinfer-plugin-dev
         /.
         /usr
         /usr/include
@@ -24,7 +32,8 @@ Check installed
         /usr/include/x86_64-linux-gnu/NvInferPlugin.h
         /usr/include/x86_64-linux-gnu/NvInferPluginUtils.h
         ...
-	Just NvInfer.h and NvInferPlugin.h we use for tritonserver cmake.
+	
+    Just NvInfer.h and NvInferPlugin.h we use for tritonserver cmake.
 	
 ### Install TensorRT
 
@@ -38,7 +47,7 @@ The deb file can be install with many dependent packages, so it is recommended t
 ```      
 
 * TensorRT
-Pull installation documentation from https://developer.nvidia.com/nvidia-tensorrt-download
+Pull installation documentation [TensorRT-7.1.3.4.Ubuntu-18.04.x86_64-gnu.cuda-10.2.cudnn8.0.tar.gz](https://developer.nvidia.com/compute/machine-learning/tensorrt/secure/7.1/tars/TensorRT-7.1.3.4.Ubuntu-18.04.x86_64-gnu.cuda-10.2.cudnn8.0.tar.gz) from https://developer.nvidia.com/nvidia-tensorrt-download
    
 #### Unpacking
     $ tar xzvf TensorRT-7.1.3.4.Ubuntu-18.04.x86_64-gnu.cuda-10.2.cudnn8.0.tar.gz
