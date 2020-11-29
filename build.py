@@ -28,6 +28,7 @@
 import argparse
 import logging
 import docker
+import os
 import os.path
 import multiprocessing
 import pathlib
