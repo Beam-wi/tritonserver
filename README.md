@@ -102,7 +102,7 @@ release is
 ### Jetson Jetpack Support
 
 A release of Triton for the Developer Preview of JetPack 4.4 (https://developer.nvidia.com/embedded/jetpack) is provided in the attached 
-file: `v2.5.0-jetpack4.4-1795341`.tgz. This release supports the `TensorFlow 2.3.1`, `TensorFlow 1.15.4`, `TensorRT 7.1`, and Custom backends as 
+file: `v2.5.0-jetpack4.4-1795341.tgz`. This release supports the `TensorFlow 2.3.1`, `TensorFlow 1.15.4`, `TensorRT 7.1`, and Custom backends as 
 well as ensembles. `GPU` metrics, `GCS` storage and `S3` storage are not supported.
 
 The tar file contains the Triton server executable and shared libraries and also the C++ and Python client libraries and examples.
