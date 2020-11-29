@@ -11,7 +11,7 @@ Load [cmake-3.19.0-rc3.tar.gz](https://cmake.org/files/v3.19/cmake-3.19.0-rc3.ta
 
 ```　
 　　$ tar -zxvf cmake-3.19.0-rc3.tar.gz
-　　$ cd cmake-3.19.0
+　　$ cd cmake-3.19.0-rc3
 　　$ ./configure
 　　$ make
 　　$ sudo make install
