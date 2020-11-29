@@ -27,7 +27,7 @@ Add to environment variables.
     $ source ~/.bashrc
 ```
 
-##  Install With Compiled Package
+##  Or Install With Compiled Package
 
 ### Load the compiled package 
 
