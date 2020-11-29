@@ -210,7 +210,7 @@ def core_cmake_args(components, backends, install_dir):
     )
     # cargs.append('/workspace/build')
     # cargs.append(f'{os.path.dirname(__file__)}/build')
-    cargs.append(f"{os.getenv('TRITON_SOURCE')}/build")  # os.environ.get('TRITON_SOURCE')
+    cargs.append(f"{FLAGS.source_dir}/build")  # os.environ.get('TRITON_SOURCE')
     return cargs
 
 
@@ -943,6 +943,11 @@ if __name__ == '__main__':
         default=None,
         help='Install directory, default is <builddir>/opt/tritonserver.')
     parser.add_argument(
+        '--source-dir',
+        required=False,
+        default=None,
+        help='There dirname of build.py, which must be given when build in terminal or export TRITON_SOURCE=`pwd`.')
+    parser.add_argument(
         '--build-type',
         required=False,
         default='Release',
@@ -1084,6 +1089,8 @@ if __name__ == '__main__':
         FLAGS.endpoint = []
     if FLAGS.filesystem is None:
         FLAGS.filesystem = []
+    if FLAGS.source_dir is None:
+        FLAGS.source_dir = os.getenv('TRITON_SOURCE')
 
     if FLAGS.container_version is not None:
         if FLAGS.container_version in CONTAINER_VERSION_MAP:
