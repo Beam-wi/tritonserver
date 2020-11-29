@@ -1,4 +1,4 @@
-## INSTALL WITH SOURCE CODE
+## Install With Source Code
 ### Remove Old Version
 
 ```
@@ -7,7 +7,7 @@
 　　
 ### Load New
 
-Load tar from https://cmake.org/download/ or https://cmake.org/files/.
+Load [cmake-3.19.0-rc3.tar.gz](https://cmake.org/files/v3.19/cmake-3.19.0-rc3.tar.gz) from https://cmake.org/download/ or https://cmake.org/files/.
 
 ```　
 　　$ tar -zxvf cmake-3.19.0-rc3.tar.gz
@@ -27,11 +27,11 @@ Add to environment variables.
     $ source ~/.bashrc
 ```
 
-##  INSTALL WITH COMPILED PACKAGE
+##  Install With Compiled Package
 
 ### Load the compiled package 
 
-Load tar cmake-3.19.0-rc3-Linux-x86_64.tar.gz from https://cmake.org/download/ or https://cmake.org/files/.
+Load [cmake-3.19.0-rc3-Linux-x86_64.tar.gz](https://cmake.org/files/v3.19/cmake-3.19.0-rc3-Linux-x86_64.tar.gz) from https://cmake.org/download/ or https://cmake.org/files/. Only support `Linux-x86_64`.
 
 Only add to environment variables.
 
