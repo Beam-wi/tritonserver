@@ -102,100 +102,6 @@ application.
   throughput, and server latency. The metrics are provided in
   Prometheus data format.
 
-## Documentation
-
-[Triton Architecture](docs/architecture.md) gives a high-level
-overview of the structure and capabilities of the inference
-server. There is also an [FAQ](docs/faq.md). Additional documentation
-is divided into [*user*](#user-documentation) and
-[*developer*](#developer-documentation) sections. The *user*
-documentation describes how to use Triton as an inference solution,
-including information on how to configure Triton, how to organize and
-configure your models, how to use the C++ and Python clients, etc. The
-*developer* documentation describes how to build and test Triton and
-also how Triton can be extended with new functionality.
-
-The Triton [Release
-Notes](https://docs.nvidia.com/deeplearning/triton-inference-server/release-notes/index.html)
-and [Support
-Matrix](https://docs.nvidia.com/deeplearning/dgx/support-matrix/index.html)
-indicate the required versions of the NVIDIA Driver and CUDA, and also
-describe supported GPUs.
-
-### User Documentation
-
-- [QuickStart](docs/quickstart.md)
-  - [Install](docs/quickstart.md#install-triton-docker-image)
-  - [Run](docs/quickstart.md#run-triton)
-- [Model Repository](docs/model_repository.md)
-- [Model Configuration](docs/model_configuration.md)
-- [Model Management](docs/model_management.md)
-- [Custom Operations](docs/custom_operations.md)
-- [Client Libraries](docs/client_libraries.md)
-- [Client Examples](docs/client_examples.md)
-- [Optimization](docs/optimization.md)
-  - [Model Analyzer](docs/model_analyzer.md)
-  - [Performance Analyzer](docs/perf_analyzer.md)
-- [Metrics](docs/metrics.md)
-
-The [quickstart](docs/quickstart.md) walks you through all the steps
-required to install and run Triton with an example image
-classification model and then use an example client application to
-perform inferencing using that model. The quickstart also demonstrates
-how [Triton supports both GPU systems and CPU-only
-systems](docs/quickstart.md#run-triton).
-
-The first step in using Triton to serve your models is to place one or
-more models into a [model
-repository](docs/model_repository.md). Optionally, depending on the type
-of the model and on what Triton capabilities you want to enable for
-the model, you may need to create a [model
-configuration](docs/model_configuration.md) for the model.  If your
-model has [custom operations](docs/custom_operations.md) you will need
-to make sure they are loaded correctly by Triton.
-
-After you have your model(s) available in Triton, you will want to
-send inference and other requests to Triton from your *client*
-application. The [Python and C++ client
-libraries](docs/client_libraries.md) provide
-[APIs](docs/client_libraries.md#client-library-apis) to simplify this
-communication. There are also a large number of [client
-examples](docs/client_examples.md) that demonstrate how to use the
-libraries.  You can also send HTTP/REST requests directly to Triton
-using the [HTTP/REST JSON-based
-protocol](docs/inference_protocols.md#httprest-and-grpc-protocols) or
-[generate a GRPC client for many other
-languages](docs/client_libraries.md).
-
-Understanding and [optimizing performance](docs/optimization.md) is an
-important part of deploying your models. The Triton project provides
-the [Performance Analyzer](docs/perf_analyzer.md) and the [Model
-Analyzer](docs/model_analyzer.md) to help your optimization
-efforts. Specifically, you will want to optimize [scheduling and
-batching](docs/architecture.md#models-and-schedulers) and [model
-instances](docs/model_configuration.md#instance-groups) appropriately
-for each model. You may also want to consider [ensembling multiple
-models and pre/post-processing](docs/architecture.md#ensemble-models)
-into a pipeline. In some cases you may find [individual inference
-request trace data](docs/trace.md) useful when optimizing. A
-[Prometheus metrics endpoint](docs/metrics.md) allows you to visualize
-and monitor aggregate inference metrics.
-
-NVIDIA publishes a number of [deep learning
-examples](https://github.com/NVIDIA/DeepLearningExamples) that use
-Triton.
-
-As part of you deployment strategy you may want to [explicitly manage
-what models are available by loading and unloading
-models](docs/model_management.md) from a running Triton server. If you
-are using Kubernetes for deployment a simple example of how to [deploy
-Triton using Kubernetes and Helm](deploy/single_server/README.rst) may
-be helpful.
-
-The [version 1 to version 2 migration
-information](docs/v1_to_v2.md) is helpful if you are moving to
-version 2 of Triton from previously using version 1.
-
 ### Jetson Jetpack Support
 
 A release of Triton for the Developer Preview of JetPack 4.4 (https://developer.nvidia.com/embedded/jetpack) is provided in the attached 
@@ -316,6 +222,100 @@ and a version string is required to specify `TensorFlow 2.x`.
 ### Run Triton
     $ cd /opt/tritonserver/tritonserver/install/bin
     $ ./tritonserver --model-repository=/Path~/model_repository/tensorrt
+    
+## Documentation
+
+[Triton Architecture](docs/architecture.md) gives a high-level
+overview of the structure and capabilities of the inference
+server. There is also an [FAQ](docs/faq.md). Additional documentation
+is divided into [*user*](#user-documentation) and
+[*developer*](#developer-documentation) sections. The *user*
+documentation describes how to use Triton as an inference solution,
+including information on how to configure Triton, how to organize and
+configure your models, how to use the C++ and Python clients, etc. The
+*developer* documentation describes how to build and test Triton and
+also how Triton can be extended with new functionality.
+
+The Triton [Release
+Notes](https://docs.nvidia.com/deeplearning/triton-inference-server/release-notes/index.html)
+and [Support
+Matrix](https://docs.nvidia.com/deeplearning/dgx/support-matrix/index.html)
+indicate the required versions of the NVIDIA Driver and CUDA, and also
+describe supported GPUs.
+
+### User Documentation
+
+- [QuickStart](docs/quickstart.md)
+  - [Install](docs/quickstart.md#install-triton-docker-image)
+  - [Run](docs/quickstart.md#run-triton)
+- [Model Repository](docs/model_repository.md)
+- [Model Configuration](docs/model_configuration.md)
+- [Model Management](docs/model_management.md)
+- [Custom Operations](docs/custom_operations.md)
+- [Client Libraries](docs/client_libraries.md)
+- [Client Examples](docs/client_examples.md)
+- [Optimization](docs/optimization.md)
+  - [Model Analyzer](docs/model_analyzer.md)
+  - [Performance Analyzer](docs/perf_analyzer.md)
+- [Metrics](docs/metrics.md)
+
+The [quickstart](docs/quickstart.md) walks you through all the steps
+required to install and run Triton with an example image
+classification model and then use an example client application to
+perform inferencing using that model. The quickstart also demonstrates
+how [Triton supports both GPU systems and CPU-only
+systems](docs/quickstart.md#run-triton).
+
+The first step in using Triton to serve your models is to place one or
+more models into a [model
+repository](docs/model_repository.md). Optionally, depending on the type
+of the model and on what Triton capabilities you want to enable for
+the model, you may need to create a [model
+configuration](docs/model_configuration.md) for the model.  If your
+model has [custom operations](docs/custom_operations.md) you will need
+to make sure they are loaded correctly by Triton.
+
+After you have your model(s) available in Triton, you will want to
+send inference and other requests to Triton from your *client*
+application. The [Python and C++ client
+libraries](docs/client_libraries.md) provide
+[APIs](docs/client_libraries.md#client-library-apis) to simplify this
+communication. There are also a large number of [client
+examples](docs/client_examples.md) that demonstrate how to use the
+libraries.  You can also send HTTP/REST requests directly to Triton
+using the [HTTP/REST JSON-based
+protocol](docs/inference_protocols.md#httprest-and-grpc-protocols) or
+[generate a GRPC client for many other
+languages](docs/client_libraries.md).
+
+Understanding and [optimizing performance](docs/optimization.md) is an
+important part of deploying your models. The Triton project provides
+the [Performance Analyzer](docs/perf_analyzer.md) and the [Model
+Analyzer](docs/model_analyzer.md) to help your optimization
+efforts. Specifically, you will want to optimize [scheduling and
+batching](docs/architecture.md#models-and-schedulers) and [model
+instances](docs/model_configuration.md#instance-groups) appropriately
+for each model. You may also want to consider [ensembling multiple
+models and pre/post-processing](docs/architecture.md#ensemble-models)
+into a pipeline. In some cases you may find [individual inference
+request trace data](docs/trace.md) useful when optimizing. A
+[Prometheus metrics endpoint](docs/metrics.md) allows you to visualize
+and monitor aggregate inference metrics.
+
+NVIDIA publishes a number of [deep learning
+examples](https://github.com/NVIDIA/DeepLearningExamples) that use
+Triton.
+
+As part of you deployment strategy you may want to [explicitly manage
+what models are available by loading and unloading
+models](docs/model_management.md) from a running Triton server. If you
+are using Kubernetes for deployment a simple example of how to [deploy
+Triton using Kubernetes and Helm](deploy/single_server/README.rst) may
+be helpful.
+
+The [version 1 to version 2 migration
+information](docs/v1_to_v2.md) is helpful if you are moving to
+version 2 of Triton from previously using version 1.
 
 ### Developer Documentation
 
