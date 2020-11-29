@@ -67,7 +67,7 @@ Other Dependencies
 Pull installation documentation.
 
 ```
-$ git clone  https://github.com/Beam-wi/tritonserver.git
+$ git clone https://github.com/Beam-wi/tritonserver.git
 $ cd tritonserver
 $ git checkout r20.12
 ```
@@ -97,8 +97,9 @@ $ cmake -DTRITON_ENABLE_TENSORRT=ON -DTRITON_ENABLE_GPU=ON -DTRITON_ENABLE_METRI
 
 $ make -j24 server
 $ make install
+
+Add the share lib to -DTRITON_EXTRA_LIB_PATHS, only tensorrt was referenced in the demo.
 ```
-    Add the share lib to -DTRITON_EXTRA_LIB_PATHS, only tensorrt was referenced in the demo.
 
 Add to environment variables for Arm64
 
