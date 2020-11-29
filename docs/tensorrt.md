@@ -1,6 +1,6 @@
 ### Dependencies
 
-Download deb from https://developer.download.nvidia.cn/compute/machine-learning/repos/ubuntu1804/x86_64/
+Download [deb](https://developer.download.nvidia.cn/compute/machine-learning/repos/ubuntu1804/x86_64/) from https://developer.download.nvidia.cn/compute/machine-learning/repos/ubuntu1804/x86_64/
 
     libnvinfer7
     libnvinfer-dev
@@ -9,12 +9,12 @@ Download deb from https://developer.download.nvidia.cn/compute/machine-learning/
     
 Note: Pay attention to installation sequence.
 	
-* Load [libnvinfer7_7.1.3-1+cuda10.2_amd64.deb](https://developer.download.nvidia.cn/compute/machine-learning/repos/ubuntu1804/x86_64/libnvinfer7_7.1.3-1+cuda10.2_amd64.deb)
-* Load [libnvinfer-dev_7.1.3-1+cuda10.2_amd64.deb](https://developer.download.nvidia.cn/compute/machine-learning/repos/ubuntu1804/x86_64/libnvinfer-dev_7.1.3-1+cuda10.2_amd64.deb)
-* Load [libnvinfer-plugin7_7.1.3-1+cuda10.2_amd64.deb](https://developer.download.nvidia.cn/compute/machine-learning/repos/ubuntu1804/x86_64/libnvinfer-plugin7_7.1.3-1+cuda10.2_amd64.deb)
-* Load [libnvinfer-plugin7_7.1.3-1+cuda10.2_amd64.deb](https://developer.download.nvidia.cn/compute/machine-learning/repos/ubuntu1804/x86_64/libnvinfer-plugin-dev_7.1.3-1+cuda10.2_amd64.deb)
+* [libnvinfer7_7.1.3-1+cuda10.2_amd64.deb](https://developer.download.nvidia.cn/compute/machine-learning/repos/ubuntu1804/x86_64/libnvinfer7_7.1.3-1+cuda10.2_amd64.deb)
+* [libnvinfer-dev_7.1.3-1+cuda10.2_amd64.deb](https://developer.download.nvidia.cn/compute/machine-learning/repos/ubuntu1804/x86_64/libnvinfer-dev_7.1.3-1+cuda10.2_amd64.deb)
+* [libnvinfer-plugin7_7.1.3-1+cuda10.2_amd64.deb](https://developer.download.nvidia.cn/compute/machine-learning/repos/ubuntu1804/x86_64/libnvinfer-plugin7_7.1.3-1+cuda10.2_amd64.deb)
+* [libnvinfer-plugin7_7.1.3-1+cuda10.2_amd64.deb](https://developer.download.nvidia.cn/compute/machine-learning/repos/ubuntu1804/x86_64/libnvinfer-plugin-dev_7.1.3-1+cuda10.2_amd64.deb)
 		
-Check installed
+Install and check
 
     $ dpkg -i ~Path/libninfer*.deb
     $ dpkg -L libnvinfer-dev
