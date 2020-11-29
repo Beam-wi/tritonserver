@@ -240,9 +240,8 @@ Other Dependencies
 Pull installation documentation.
 
 ```
-$ git clone  https://github.com/Beam-wi/tritonserver.git
+$ git clone https://github.com/Beam-wi/tritonserver.git
 $ cd tritonserver
-$ export TRITON_SOURCE=`pwd`
 $ git checkout r20.10
 ```
 
@@ -254,8 +253,8 @@ $ python3 ./build.py --build-dir /opt/tritonserver --install-dir /opt/tritonserv
 --endpoint=http --endpoint=grpc --backend=custom --backend=ensemble --backend=tensorrt
 ```
 
-* r20.10 use container with `--container-version=version`, but higher without container `--no-container-build`.
-* Arm64 architecture non-supported gcs and s3, without `--filesystem=gcs` `--filesystem=s3`.
+* `r20.10` use container with `--container-version=version`, but higher without container `--no-container-build`.
+* `Arm64` architecture non-supported `gcs` and `s3`, without `--filesystem=gcs` `--filesystem=s3`.
 * Other backend with `--backend=backend_name`, which share lib add to environment variables.
 
 
