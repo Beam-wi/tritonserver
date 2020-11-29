@@ -243,7 +243,7 @@ def core_cmake_args(components, backends, install_dir):
 
     cargs.append('-DTRITON_EXTRA_LIB_PATHS=/opt/tritonserver/lib')
     # cargs.append('/workspace/build')
-    cargs.append(f'{os.path.dirname(__file__)}/build')
+    cargs.append(f"{os.path.abspath(os.path.dirname(__file__))}/build")
     return cargs
 
 
