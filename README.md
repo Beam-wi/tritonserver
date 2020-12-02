@@ -203,7 +203,7 @@ To run the clients the following dependencies must be installed.
     python3 -m pip install --upgrade wheel setuptools
     python3 -m pip install --upgrade grpcio-tools numpy pillow
     
-You have confirm the interpreter of python for there is python instead of python3 when install client by default. Check with `ls -l /usr/bin | grep python`.
+You have to confirm the interpreter of python for there is python instead of python3 when install client by default. Check with `ls -l /usr/bin | grep python`.
 
     $ sudo rm /usr/bin/python
     # Or move to /usr/bin/python.bak
