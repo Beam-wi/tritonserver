@@ -214,7 +214,7 @@ You have confirm the interpreter of python for there is python instead of python
 Build and install.
 
     $ mkdir /opt/tritonclient && cd /opt/tritonclient
-    $ cmake -DCMAKE_BUILD_TYPE=Release Path~tritonserver/build
+    $ cmake -DCMAKE_BUILD_TYPE=Release Path~/tritonserver/build
     $ make -j24 client
     
 The Python wheel for the python client library is present in the tar file and can be installed by running the following command:
