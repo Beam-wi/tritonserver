@@ -207,8 +207,10 @@ You have to confirm the interpreter of python for there is python instead of pyt
 
     # Remove the link /usr/bin/python 
     $ sudo rm /usr/bin/python
+    
     # Or move to /usr/bin/python.bak
     $ sudo mv /usr/bin/python /usr/bin/python.bak
+    
     # Create a new link
     $ sudo ln -s python3.6 /usr/bin/python
 
