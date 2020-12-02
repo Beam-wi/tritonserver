@@ -62,7 +62,7 @@ Other Dependencies
 
 * There is no need [TensorRT](docs/tensorrt.md) for `JetPack4.x` but `Ubuntu 18.04`.
 
-### Build With Cmake
+### Install Server With Cmake
 
 Pull installation documentation.
 
@@ -112,6 +112,8 @@ adit:
 $ source ~/.bashrc
 ```
 
+### Install Client With Cmake
+
 To run the clients the following dependencies must be installed.
 
     apt-get install -y --no-install-recommends \
@@ -125,6 +127,23 @@ To run the clients the following dependencies must be installed.
 
     python3 -m pip install --upgrade wheel setuptools
     python3 -m pip install --upgrade grpcio-tools numpy pillow
+    
+You have to confirm the interpreter of python for there is python instead of python3 when install client by default. Check with `ls -l /usr/bin | grep python`.
+
+    # Remove the link /usr/bin/python 
+    $ sudo rm /usr/bin/python
+    
+    # Or move to /usr/bin/python.bak
+    $ sudo mv /usr/bin/python /usr/bin/python.bak
+    
+    # Create a new link
+    $ sudo ln -s python3.6 /usr/bin/python
+
+Build and install.
+
+    $ mkdir /opt/tritonclient && cd /opt/tritonclient
+    $ cmake -DCMAKE_BUILD_TYPE=Release Path~/tritonserver/build
+    $ make -j24 client
     
 The Python wheel for the python client library is present in the tar file and can be installed by running the following command:
 
